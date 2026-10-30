@@ -1,0 +1,6 @@
+{
+  "name": "Anki Flashcards",
+  "description": "Japanese JLPT N3 Flashcard Game with Myanmar meanings, quiz and matching game modes, and full Anki .apkg import and export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

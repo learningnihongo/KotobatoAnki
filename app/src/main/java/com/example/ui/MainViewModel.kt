@@ -1,0 +1,165 @@
+package com.example.ui
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.AppDatabase
+import com.example.data.CardEntity
+import com.example.data.DeckEntity
+import com.example.data.FlashcardRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+enum class Screen {
+    DASHBOARD,
+    DECKS_MANAGER,
+    STUDY_FLIP,
+    QUIZ_GAME,
+    MATCH_GAME,
+    VOCAB_LIST
+}
+
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = AppDatabase.getDatabase(application, viewModelScope)
+    val repository = FlashcardRepository(database.deckDao(), database.cardDao())
+    val soundHelper = SoundHelper(application)
+
+    private val _currentScreen = MutableStateFlow(Screen.DASHBOARD)
+    val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
+
+    private val _selectedDeck = MutableStateFlow<DeckEntity?>(null)
+    val selectedDeck: StateFlow<DeckEntity?> = _selectedDeck.asStateFlow()
+
+    private val _allDecks = repository.getAllDecks().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+    val allDecks: StateFlow<List<DeckEntity>> = _allDecks
+
+    // Map of deckId to List<CardEntity>
+    private val _cardsByDeck = MutableStateFlow<Map<Long, List<CardEntity>>>(emptyMap())
+    val cardsByDeck: StateFlow<Map<Long, List<CardEntity>>> = _cardsByDeck.asStateFlow()
+
+    // Cards for currently selected deck
+    private val _currentDeckCards = MutableStateFlow<List<CardEntity>>(emptyList())
+    val currentDeckCards: StateFlow<List<CardEntity>> = _currentDeckCards.asStateFlow()
+
+    init {
+        // Observe decks and refresh cards
+        viewModelScope.launch {
+            allDecks.collect { decks ->
+                if (_selectedDeck.value == null && decks.isNotEmpty()) {
+                    _selectedDeck.value = decks.first()
+                }
+                refreshAllCards(decks)
+            }
+        }
+    }
+
+    private suspend fun refreshAllCards(decks: List<DeckEntity>) {
+        val map = mutableMapOf<Long, List<CardEntity>>()
+        for (deck in decks) {
+            val list = repository.getCardsForDeck(deck.id)
+            map[deck.id] = list
+        }
+        _cardsByDeck.value = map
+
+        val curDeckId = _selectedDeck.value?.id
+        if (curDeckId != null) {
+            _currentDeckCards.value = map[curDeckId] ?: emptyList()
+        }
+    }
+
+    fun navigateTo(screen: Screen, deck: DeckEntity? = null) {
+        if (deck != null) {
+            _selectedDeck.value = deck
+            _currentDeckCards.value = _cardsByDeck.value[deck.id] ?: emptyList()
+        }
+        _currentScreen.value = screen
+    }
+
+    fun navigateBack() {
+        _currentScreen.value = Screen.DASHBOARD
+    }
+
+    fun rateCard(card: CardEntity, rating: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateCardSrs(card, rating)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun toggleStar(card: CardEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.toggleStar(card)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun saveCard(card: CardEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (card.id == 0L) {
+                repository.insertCard(card)
+            } else {
+                repository.updateCard(card)
+            }
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun deleteCard(card: CardEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteCard(card)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun createDeck(name: String, desc: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val id = repository.insertDeck(DeckEntity(name = name, description = desc))
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun updateDeck(deck: DeckEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateDeck(deck)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun duplicateDeck(deck: DeckEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cards = repository.getCardsForDeck(deck.id)
+            val newDeckId = repository.insertDeck(deck.copy(id = 0, name = "${deck.name} (Copy)"))
+            val newCards = cards.map { it.copy(id = 0, deckId = newDeckId) }
+            repository.insertCards(newCards)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun deleteDeck(deck: DeckEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteDeck(deck)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun onImportDone() {
+        viewModelScope.launch(Dispatchers.IO) {
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        soundHelper.shutdown()
+    }
+}
