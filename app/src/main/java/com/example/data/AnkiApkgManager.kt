@@ -4,6 +4,8 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.BufferedReader
@@ -11,6 +13,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStreamReader
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -26,6 +29,10 @@ object AnkiApkgManager {
 
     /**
      * Exports cards to a valid Anki .apkg file (ZIP containing collection.anki2 SQLite database and media json).
+     */
+    /**
+     * Exports cards to a valid Anki .apkg file (ZIP containing collection.anki2 SQLite database and media json).
+     * Complies strictly with AnkiDroid & Anki Desktop Rust backend schema.
      */
     fun exportToApkg(
         context: Context,
@@ -51,76 +58,16 @@ object AnkiApkgManager {
             val deckAnkiId = 1600000000001L
             val modelId = 1600000000000L
 
+            val decksJson = buildDecksJson(deckAnkiId, deck.name, deck.description, nowSec)
+            val modelsJson = buildModelsJson(modelId, deckAnkiId, nowSec)
+            val dconfJson = buildDconfJson(nowSec)
+            val confJson = buildConfJson(deckAnkiId, modelId)
+
             // Insert into col
             val colSql = """
                 INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent()
-
-            val sanitizedDeckName = deck.name.replace("\"", "\\\"")
-            val sanitizedDesc = deck.description.replace("\"", "\\\"")
-
-            val modelsJson = """
-                {
-                  "$modelId": {
-                    "id": $modelId,
-                    "name": "Basic (Japanese-Burmese)",
-                    "type": 0,
-                    "mod": $nowSec,
-                    "usn": -1,
-                    "sortf": 0,
-                    "did": $deckAnkiId,
-                    "tmpls": [
-                      {
-                        "name": "Card 1",
-                        "ord": 0,
-                        "qfmt": "{{Front}}",
-                        "afmt": "{{FrontSide}}<hr id=answer><div style='margin-top:16px; font-size:22px; color:#1E1B4B;'>{{Back}}</div>",
-                        "did": null
-                      }
-                    ],
-                    "flds": [
-                      {"name": "Front", "ord": 0, "sticky": false, "rtl": false, "font": "Arial", "size": 24},
-                      {"name": "Back", "ord": 1, "sticky": false, "rtl": false, "font": "Arial", "size": 22}
-                    ],
-                    "css": ".card { font-family: arial, sans-serif; font-size: 22px; text-align: center; color: black; background-color: #FAFAFA; padding: 20px; }"
-                  }
-                }
-            """.trimIndent().replace("\n", "")
-
-            val decksJson = """
-                {
-                  "1": {"id": 1, "name": "Default", "mod": $nowSec, "usn": 0, "desc": "", "collapsed": false},
-                  "$deckAnkiId": {
-                    "id": $deckAnkiId,
-                    "name": "$sanitizedDeckName",
-                    "mod": $nowSec,
-                    "usn": -1,
-                    "desc": "$sanitizedDesc",
-                    "collapsed": false
-                  }
-                }
-            """.trimIndent().replace("\n", "")
-
-            val dconfJson = """
-                {
-                  "1": {
-                    "id": 1,
-                    "name": "Default",
-                    "mod": $nowSec,
-                    "usn": 0,
-                    "maxTaken": 60,
-                    "autoplay": true,
-                    "timer": 0,
-                    "replayq": true,
-                    "new": {"bury": false, "delays": [1.0, 10.0], "initialFactor": 2500, "ints": [1, 4, 0], "order": 1, "perDay": 20},
-                    "lapse": {"delays": [10.0], "leechAction": 0, "leechFails": 8, "minInt": 1, "mult": 0.0},
-                    "rev": {"bury": false, "ease4": 1.3, "fuzz": 0.05, "ivlFct": 1.0, "maxIvl": 36500, "minSpace": 1, "perDay": 200}
-                  }
-                }
-            """.trimIndent().replace("\n", "")
-
-            val confJson = """{"nextPos": 1, "estTimes": true, "activeDecks": [$deckAnkiId], "sortType": "noteFld", "timeLim": 0, "sortBackwards": false, "addToCur": true, "curDeck": $deckAnkiId, "curModel": $modelId, "collapseTime": 1200}"""
 
             db.execSQL(
                 colSql,
@@ -176,6 +123,7 @@ object AnkiApkgManager {
                     val flds = "$frontHtml\u001f$backHtml"
                     val sfld = if (card.kanji.isNotBlank()) card.kanji else card.kana
                     val guid = generateAnkiGuid()
+                    val csum = calculateAnkiCsum(sfld)
 
                     noteStmt.bindLong(1, noteId)
                     noteStmt.bindString(2, guid)
@@ -185,7 +133,7 @@ object AnkiApkgManager {
                     noteStmt.bindString(6, " JLPT_N3 Japanese_Myanmar ")
                     noteStmt.bindString(7, flds)
                     noteStmt.bindString(8, sfld)
-                    noteStmt.bindLong(9, (sfld.hashCode().toLong() and 0xFFFFFFFFL))
+                    noteStmt.bindLong(9, csum)
                     noteStmt.bindLong(10, 0)
                     noteStmt.bindString(11, "")
                     noteStmt.executeInsert()
@@ -483,6 +431,230 @@ object AnkiApkgManager {
 
     private fun generateAnkiGuid(): String {
         return UUID.randomUUID().toString().replace("-", "").take(10)
+    }
+
+    /**
+     * Calculates the standard Anki note checksum: first 4 bytes of SHA-1 of the sort field.
+     */
+    private fun calculateAnkiCsum(sfld: String): Long {
+        return try {
+            val md = MessageDigest.getInstance("SHA-1")
+            val digest = md.digest(sfld.toByteArray(Charsets.UTF_8))
+            var csum = 0L
+            for (i in 0 until 4) {
+                csum = (csum shl 8) or (digest[i].toLong() and 0xFFL)
+            }
+            csum
+        } catch (e: Exception) {
+            (sfld.hashCode().toLong() and 0xFFFFFFFFL)
+        }
+    }
+
+    /**
+     * Builds the decks JSON object required by Anki / AnkiDroid with all compulsory Rust Serde fields.
+     */
+    private fun buildDecksJson(
+        deckId: Long,
+        deckName: String,
+        deckDesc: String,
+        nowSec: Long
+    ): String {
+        val root = JSONObject()
+
+        // Default Deck (id: 1)
+        val defaultDeck = JSONObject().apply {
+            put("id", 1L)
+            put("mod", nowSec)
+            put("name", "Default")
+            put("usn", 0)
+            put("maxTaken", 60)
+            put("collapsed", false)
+            put("browserCollapsed", false)
+            put("newToday", JSONArray(listOf(0, 0)))
+            put("timeToday", JSONArray(listOf(0, 0)))
+            put("dyn", 0)
+            put("extendNew", 0)
+            put("conf", 1L)
+            put("revToday", JSONArray(listOf(0, 0)))
+            put("lrnToday", JSONArray(listOf(0, 0)))
+            put("timeLimit", 0)
+            put("desc", "")
+            put("extendRev", 0)
+        }
+        root.put("1", defaultDeck)
+
+        // Custom Deck
+        val customDeck = JSONObject().apply {
+            put("id", deckId)
+            put("mod", nowSec)
+            put("name", deckName)
+            put("usn", -1)
+            put("maxTaken", 60)
+            put("collapsed", false)
+            put("browserCollapsed", false)
+            put("newToday", JSONArray(listOf(0, 0)))
+            put("timeToday", JSONArray(listOf(0, 0)))
+            put("dyn", 0)
+            put("extendNew", 0)
+            put("conf", 1L)
+            put("revToday", JSONArray(listOf(0, 0)))
+            put("lrnToday", JSONArray(listOf(0, 0)))
+            put("timeLimit", 0)
+            put("desc", deckDesc)
+            put("extendRev", 0)
+        }
+        root.put(deckId.toString(), customDeck)
+
+        return root.toString()
+    }
+
+    /**
+     * Builds the models JSON object required by Anki with fields, templates, css, and req arrays.
+     */
+    private fun buildModelsJson(modelId: Long, deckId: Long, nowSec: Long): String {
+        val root = JSONObject()
+
+        val model = JSONObject().apply {
+            put("id", modelId)
+            put("name", "Basic (Japanese-Burmese)")
+            put("type", 0)
+            put("mod", nowSec)
+            put("usn", -1)
+            put("sortf", 0)
+            put("did", deckId)
+
+            val tmpls = JSONArray()
+            val tmpl = JSONObject().apply {
+                put("name", "Card 1")
+                put("ord", 0)
+                put("qfmt", "{{Front}}")
+                put("afmt", "{{FrontSide}}\n\n<hr id=answer>\n\n<div style='margin-top:16px; font-size:22px; color:#1E1B4B;'>{{Back}}</div>")
+                put("bqfmt", "")
+                put("bafmt", "")
+                put("did", JSONObject.NULL)
+            }
+            tmpls.put(tmpl)
+            put("tmpls", tmpls)
+
+            val flds = JSONArray()
+            val fld1 = JSONObject().apply {
+                put("name", "Front")
+                put("ord", 0)
+                put("sticky", false)
+                put("rtl", false)
+                put("font", "Arial")
+                put("size", 24)
+                put("media", JSONArray())
+            }
+            val fld2 = JSONObject().apply {
+                put("name", "Back")
+                put("ord", 1)
+                put("sticky", false)
+                put("rtl", false)
+                put("font", "Arial")
+                put("size", 22)
+                put("media", JSONArray())
+            }
+            flds.put(fld1)
+            flds.put(fld2)
+            put("flds", flds)
+
+            put("css", ".card { font-family: arial, sans-serif; font-size: 22px; text-align: center; color: black; background-color: #FAFAFA; padding: 20px; }")
+            put("latexPre", "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n")
+            put("latexPost", "\\end{document}")
+            put("latexsvg", false)
+
+            val reqArr = JSONArray()
+            val reqEntry = JSONArray().apply {
+                put(0)
+                put("any")
+                put(JSONArray().apply { put(0) })
+            }
+            reqArr.put(reqEntry)
+            put("req", reqArr)
+        }
+
+        root.put(modelId.toString(), model)
+        return root.toString()
+    }
+
+    /**
+     * Builds the dconf JSON object containing deck configurations.
+     */
+    private fun buildDconfJson(nowSec: Long): String {
+        val root = JSONObject()
+        val conf1 = JSONObject().apply {
+            put("id", 1L)
+            put("mod", nowSec)
+            put("name", "Default")
+            put("usn", 0)
+            put("maxTaken", 60)
+            put("autoplay", true)
+            put("timer", 0)
+            put("replayq", true)
+
+            val newConf = JSONObject().apply {
+                put("bury", false)
+                put("delays", JSONArray(listOf(1.0, 10.0)))
+                put("initialFactor", 2500)
+                put("ints", JSONArray(listOf(1, 4, 7)))
+                put("order", 1)
+                put("perDay", 20)
+            }
+            put("new", newConf)
+
+            val revConf = JSONObject().apply {
+                put("bury", false)
+                put("ease4", 1.3)
+                put("fuzz", 0.05)
+                put("ivlFct", 1.0)
+                put("maxIvl", 36500)
+                put("minSpace", 1)
+                put("perDay", 200)
+            }
+            put("rev", revConf)
+
+            val lapseConf = JSONObject().apply {
+                put("delays", JSONArray(listOf(10.0)))
+                put("leechAction", 0)
+                put("leechFails", 8)
+                put("minInt", 1)
+                put("mult", 0.0)
+            }
+            put("lapse", lapseConf)
+        }
+        root.put("1", conf1)
+        return root.toString()
+    }
+
+    /**
+     * Builds the col.conf JSON configuration.
+     */
+    private fun buildConfJson(deckId: Long, modelId: Long): String {
+        val conf = JSONObject().apply {
+            put("nextPos", 1)
+            put("estTimes", true)
+            put("activeDecks", JSONArray(listOf(1L, deckId)))
+            put("sortType", "noteFld")
+            put("timeLim", 0)
+            put("sortBackwards", false)
+            put("addToCur", true)
+            put("curDeck", deckId)
+            put("curModel", modelId)
+            put("collapseTime", 1200)
+        }
+        return conf.toString()
+    }
+
+    /**
+     * Generates a TSV text file on disk for sharing or manual file import into AnkiDroid.
+     */
+    fun exportToTextFile(context: Context, cards: List<CardEntity>, deckName: String): File {
+        val cleanName = deckName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val txtFile = File(context.cacheDir, "${cleanName}_anki.txt")
+        val content = exportToTsvText(cards)
+        txtFile.writeText(content, Charsets.UTF_8)
+        return txtFile
     }
 
     private fun createAnkiSchema(db: SQLiteDatabase) {

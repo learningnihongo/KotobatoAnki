@@ -9,10 +9,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-@Database(entities = [DeckEntity::class, CardEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [DeckEntity::class, CardEntity::class, FlashcardEntity::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao
     abstract fun cardDao(): CardDao
+    abstract fun flashcardDao(): FlashcardDao
 
     companion object {
         @Volatile
@@ -25,6 +30,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "anki_flashcards.db"
                 )
+                    .fallbackToDestructiveMigration()
                     .addCallback(AppDatabaseCallback(scope))
                     .build()
                 INSTANCE = instance
@@ -40,15 +46,20 @@ abstract class AppDatabase : RoomDatabase() {
             super.onCreate(db)
             INSTANCE?.let { database ->
                 scope.launch(Dispatchers.IO) {
-                    populateInitialData(database.deckDao(), database.cardDao())
+                    populateInitialData(database.deckDao(), database.cardDao(), database.flashcardDao())
                 }
             }
         }
 
-        private suspend fun populateInitialData(deckDao: DeckDao, cardDao: CardDao) {
+        private suspend fun populateInitialData(
+            deckDao: DeckDao,
+            cardDao: CardDao,
+            flashcardDao: FlashcardDao
+        ) {
+            val deckName = "2015/12 JLPT N3 Vocabulary"
             val deckId = deckDao.insertDeck(
                 DeckEntity(
-                    name = "2015/12 JLPT N3 Vocabulary",
+                    name = deckName,
                     description = "109 Essential Japanese Words with Hiragana, Kanji & Myanmar meanings (by Tr. Win)."
                 )
             )
@@ -63,6 +74,24 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
             cardDao.insertCards(cards)
+
+            val flashcards = PreloadedData.N3_VOCABULARY_LIST.map { item ->
+                val frontText = if (item.kanji == "-") item.kana else item.kanji
+                val backText = "${item.kana} — ${item.burmese}"
+                FlashcardEntity(
+                    front = frontText,
+                    back = backText,
+                    deckName = deckName,
+                    interval = 0,
+                    easeFactor = 2.5,
+                    repetitions = 0,
+                    lapses = 0,
+                    reviewCount = 0,
+                    srsState = 0,
+                    nextReviewTimestamp = System.currentTimeMillis()
+                )
+            }
+            flashcardDao.insertCards(flashcards)
         }
     }
 }

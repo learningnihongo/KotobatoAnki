@@ -22,12 +22,13 @@ enum class Screen {
     STUDY_FLIP,
     QUIZ_GAME,
     MATCH_GAME,
-    VOCAB_LIST
+    VOCAB_LIST,
+    ADD_CARD
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application, viewModelScope)
-    val repository = FlashcardRepository(database.deckDao(), database.cardDao())
+    val repository = FlashcardRepository(database.deckDao(), database.cardDao(), database.flashcardDao())
     val soundHelper = SoundHelper(application)
 
     private val _currentScreen = MutableStateFlow(Screen.DASHBOARD)
@@ -50,6 +51,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Cards for currently selected deck
     private val _currentDeckCards = MutableStateFlow<List<CardEntity>>(emptyList())
     val currentDeckCards: StateFlow<List<CardEntity>> = _currentDeckCards.asStateFlow()
+
+    // FlashcardEntity reactive list from FlashcardDao
+    val allFlashcards: StateFlow<List<com.example.data.FlashcardEntity>> = (repository.getAllFlashcardsFlow() ?: kotlinx.coroutines.flow.flowOf(emptyList()))
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
 
     init {
         // Observe decks and refresh cards
@@ -111,6 +120,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 repository.updateCard(card)
             }
             allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun addFlashcard(
+        front: String,
+        back: String,
+        deckName: String,
+        notes: String = "",
+        onSuccess: (com.example.data.FlashcardEntity) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val entity = repository.addFlashcard(front, back, deckName, notes)
+            allDecks.value.let { refreshAllCards(it) }
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                onSuccess(entity)
+            }
         }
     }
 

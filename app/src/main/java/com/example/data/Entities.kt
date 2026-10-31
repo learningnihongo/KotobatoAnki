@@ -39,3 +39,36 @@ data class CardEntity(
     val srsLevel: Int = 0,        // 0: New, 1: Learning, 2: Review, 3: Mastered
     val nextReviewDate: Long = 0L
 )
+
+val CardEntity.front: String
+    get() = if (kanji.isNotBlank()) kanji else kana
+
+val CardEntity.back: String
+    get() = burmeseMeaning
+
+fun FlashcardEntity.toCardEntity(deckId: Long, orderIndex: Int = 0): CardEntity {
+    return CardEntity(
+        id = id,
+        deckId = deckId,
+        kanji = front,
+        kana = "",
+        burmeseMeaning = back,
+        orderIndex = orderIndex,
+        reviewCount = reviewCount,
+        srsLevel = srsState,
+        nextReviewDate = nextReviewTimestamp
+    )
+}
+
+fun CardEntity.toFlashcardEntity(deckName: String): FlashcardEntity {
+    return FlashcardEntity(
+        id = id,
+        front = if (kanji.isNotBlank()) kanji else kana,
+        back = burmeseMeaning,
+        deckName = deckName,
+        reviewCount = reviewCount,
+        srsState = srsLevel,
+        nextReviewTimestamp = nextReviewDate
+    )
+}
+

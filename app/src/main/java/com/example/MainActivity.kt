@@ -33,11 +33,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.ExtendedFloatingActionButton
 import com.example.data.CardEntity
 import com.example.data.DeckEntity
 import com.example.ui.MainViewModel
 import com.example.ui.Screen
 import com.example.ui.screens.AddEditCardDialog
+import com.example.ui.screens.AddFlashcardScreen
 import com.example.ui.screens.AnkiSyncDialog
 import com.example.ui.screens.DeckListScreen
 import com.example.ui.screens.DeckManagementScreen
@@ -83,6 +86,18 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        floatingActionButton = {
+            if (isTopLevelScreen) {
+                ExtendedFloatingActionButton(
+                    onClick = { viewModel.navigateTo(Screen.ADD_CARD) },
+                    modifier = Modifier.testTag("fab_add_card"),
+                    icon = { Icon(Icons.Default.Add, contentDescription = "Add Card") },
+                    text = { Text("ကတ်အသစ်ထည့်မည် (Add Card)") },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        },
         bottomBar = {
             if (isTopLevelScreen) {
                 NavigationBar(
@@ -250,10 +265,27 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                                 onToggleStar = { card -> viewModel.toggleStar(card) },
                                 onEditCard = { card -> cardToEdit = card },
                                 onDeleteCard = { card -> viewModel.deleteCard(card) },
-                                onAddNewCard = { showAddCardDialog = true },
+                                onAddNewCard = { viewModel.navigateTo(Screen.ADD_CARD) },
                                 onBack = { viewModel.navigateBack() }
                             )
                         }
+                    }
+
+                    Screen.ADD_CARD -> {
+                        AddFlashcardScreen(
+                            decks = allDecks,
+                            selectedDeck = selectedDeck,
+                            onSaveFlashcard = { front, back, deckName, notes, onDone ->
+                                viewModel.addFlashcard(
+                                    front = front,
+                                    back = back,
+                                    deckName = deckName,
+                                    notes = notes,
+                                    onSuccess = { onDone() }
+                                )
+                            },
+                            onBack = { viewModel.navigateBack() }
+                        )
                     }
                 }
             }

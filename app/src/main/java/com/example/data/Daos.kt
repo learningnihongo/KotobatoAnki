@@ -13,6 +13,9 @@ interface DeckDao {
     @Query("SELECT * FROM decks ORDER BY createdAt ASC")
     fun getAllDecksFlow(): Flow<List<DeckEntity>>
 
+    @Query("SELECT * FROM decks ORDER BY createdAt ASC")
+    suspend fun getAllDecks(): List<DeckEntity>
+
     @Query("SELECT * FROM decks WHERE id = :deckId LIMIT 1")
     suspend fun getDeckById(deckId: Long): DeckEntity?
 

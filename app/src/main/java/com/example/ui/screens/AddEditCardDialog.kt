@@ -61,11 +61,11 @@ fun AddEditCardDialog(
                 OutlinedTextField(
                     value = kanji,
                     onValueChange = { kanji = it },
-                    label = { Text("Kanji (漢字)") },
+                    label = { Text("Front / Kanji (ရှေ့မျက်နှာ ဥပမာ: 血液型)") },
                     placeholder = { Text("ဥပမာ: 血液型") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("input_card_kanji"),
+                        .testTag("card_front_input"),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -89,11 +89,11 @@ fun AddEditCardDialog(
                 OutlinedTextField(
                     value = burmese,
                     onValueChange = { burmese = it },
-                    label = { Text("Burmese Meaning (မြန်မာအဓိပ္ပာယ်)") },
+                    label = { Text("Back / Meaning (နောက်မျက်နှာ မြန်မာအဓိပ္ပာယ်)") },
                     placeholder = { Text("ဥပမာ: သွေးအမျိုးအစား") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("input_card_burmese"),
+                        .testTag("card_back_input"),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )

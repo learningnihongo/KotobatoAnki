@@ -7,8 +7,78 @@ import java.io.File
 
 class FlashcardRepository(
     private val deckDao: DeckDao,
-    private val cardDao: CardDao
+    private val cardDao: CardDao,
+    private val flashcardDao: FlashcardDao? = null
 ) {
+    fun getFlashcardDao(): FlashcardDao? = flashcardDao
+
+    // FlashcardEntity operations
+    fun getAllFlashcardsFlow(): Flow<List<FlashcardEntity>>? = flashcardDao?.getAllCardsFlow()
+    fun getFlashcardsByDeckFlow(deckName: String): Flow<List<FlashcardEntity>>? = flashcardDao?.getCardsByDeckFlow(deckName)
+    suspend fun insertFlashcard(flashcard: FlashcardEntity): Long = flashcardDao?.insertCard(flashcard) ?: -1L
+    suspend fun updateFlashcard(flashcard: FlashcardEntity) { flashcardDao?.updateCard(flashcard) }
+    suspend fun deleteFlashcard(flashcard: FlashcardEntity) { flashcardDao?.deleteCard(flashcard) }
+
+    suspend fun addFlashcard(
+        front: String,
+        back: String,
+        deckName: String,
+        notes: String = ""
+    ): FlashcardEntity {
+        val trimmedFront = front.trim()
+        val trimmedBack = back.trim()
+        val trimmedDeck = deckName.trim().ifBlank { "2015/12 JLPT N3 Vocabulary" }
+
+        val entity = FlashcardEntity(
+            front = trimmedFront,
+            back = trimmedBack,
+            deckName = trimmedDeck,
+            interval = 0,
+            easeFactor = 2.5,
+            repetitions = 0,
+            lapses = 0,
+            reviewCount = 0,
+            srsState = 0,
+            nextReviewTimestamp = System.currentTimeMillis(),
+            createdAt = System.currentTimeMillis()
+        )
+        val flashcardId = flashcardDao?.insertCard(entity) ?: 0L
+
+        // Also synchronize to DeckDao & CardDao so all UI views & games stay in sync
+        val existingDecks = deckDao.getAllDecks()
+        val targetDeck = existingDecks.firstOrNull { it.name.equals(trimmedDeck, ignoreCase = true) }
+        val deckId = targetDeck?.id ?: deckDao.insertDeck(
+            DeckEntity(
+                name = trimmedDeck,
+                description = "User created flashcard deck"
+            )
+        )
+
+        val cardEntity = CardEntity(
+            deckId = deckId,
+            kanji = trimmedFront,
+            kana = "",
+            burmeseMeaning = trimmedBack,
+            notes = notes
+        )
+        cardDao.insertCard(cardEntity)
+
+        return entity.copy(id = flashcardId)
+    }
+    suspend fun updateStudyProgress(
+        cardId: Long,
+        interval: Int,
+        easeFactor: Double,
+        repetitions: Int,
+        lapses: Int,
+        srsState: Int,
+        lastReviewedTimestamp: Long,
+        nextReviewTimestamp: Long
+    ) {
+        flashcardDao?.updateStudyProgress(
+            cardId, interval, easeFactor, repetitions, lapses, srsState, lastReviewedTimestamp, nextReviewTimestamp
+        )
+    }
     fun getAllDecks(): Flow<List<DeckEntity>> = deckDao.getAllDecksFlow()
 
     suspend fun getDeckById(deckId: Long): DeckEntity? = deckDao.getDeckById(deckId)
@@ -70,6 +140,10 @@ class FlashcardRepository(
 
     fun exportToApkg(context: Context, deck: DeckEntity, cards: List<CardEntity>): File {
         return AnkiApkgManager.exportToApkg(context, deck, cards)
+    }
+
+    fun exportToTextFile(context: Context, cards: List<CardEntity>, deckName: String): File {
+        return AnkiApkgManager.exportToTextFile(context, cards, deckName)
     }
 
     suspend fun importFromUri(context: Context, uri: Uri): Pair<DeckEntity, Int> {

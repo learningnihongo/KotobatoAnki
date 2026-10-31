@@ -227,7 +227,7 @@ fun AnkiSyncDialog(
                 // Action 1: Export .apkg and Share
                 AnkiOptionCard(
                     title = "Anki .apkg ဖိုင် ထုတ်ယူ / မျှဝေရန်",
-                    subtitle = "AnkiDroid သို့မဟုတ် Anki Desktop သို့ တိုက်ရိုက် Share လုပ်နိုင်သည်",
+                    subtitle = "AnkiDroid သို့မဟုတ် Anki Desktop သို့ တိုက်ရိုက် သွင်းနိုင်သည် (.apkg)",
                     icon = Icons.Default.Share,
                     tag = "export_apkg_button",
                     onClick = {
@@ -249,7 +249,32 @@ fun AnkiSyncDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Action 2: Copy TSV for Anki Quick Import
+                // Action 2: Export .txt file
+                AnkiOptionCard(
+                    title = "Anki Text (.txt) ဖိုင် ထုတ်ယူ / မျှဝေရန်",
+                    subtitle = "AnkiDroid Import ထဲတွင် .txt ဖိုင် ရွေးချယ်ပြီး သွင်းနိုင်သည်",
+                    icon = Icons.Default.FileDownload,
+                    tag = "export_txt_button",
+                    onClick = {
+                        isLoading = true
+                        scope.launch {
+                            try {
+                                val txtFile = withContext(Dispatchers.IO) {
+                                    repository.exportToTextFile(context, cards, deck.name)
+                                }
+                                isLoading = false
+                                shareTextFile(context, txtFile, deck.name)
+                            } catch (e: Exception) {
+                                isLoading = false
+                                statusMessage = "Text Export မအောင်မြင်ပါ: ${e.localizedMessage}"
+                            }
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Action 3: Copy TSV for Anki Quick Import
                 AnkiOptionCard(
                     title = "Anki Text (TSV) ကူးယူရန်",
                     subtitle = "Clipboard သို့ ကူးယူပြီး Anki ထဲတွင် ချက်ချင်း Paste လုပ်နိုင်သည်",
@@ -389,10 +414,34 @@ private fun shareApkgFile(context: Context, file: File, deckName: String) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-        val chooser = Intent.createChooser(intent, "Share Anki Deck (.apkg)")
+        val chooser = Intent.createChooser(intent, "Anki .apkg မျှဝေရန်")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)
     } catch (e: Exception) {
         Toast.makeText(context, "Error sharing .apkg: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun shareTextFile(context: Context, file: File, deckName: String) {
+    try {
+        val uri: Uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "$deckName (Anki TSV)")
+            putExtra(Intent.EXTRA_TEXT, file.readText())
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val chooser = Intent.createChooser(intent, "Anki Text (.txt) မျှဝေရန်")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Error sharing .txt: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
