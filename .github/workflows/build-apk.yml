@@ -31,6 +31,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fix Gradlew Permissions & Line Endings
+        run: |
+          sed -i 's/\r$//' gradlew
+          chmod +x gradlew
+
       - name: Determine Version Tag
         id: versioning
         run: |
@@ -56,6 +61,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: 'gradle'
 
       - name: Setup Android SDK Environment & Licenses
         run: |
@@ -64,10 +70,13 @@ jobs:
           echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
 
-          mkdir -p "$SDK_DIR/licenses" 2>/dev/null || true
-          printf "\n89336d0b3d7730a4e8313b618456e6dcbda44770\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$SDK_DIR/licenses/android-sdk-license" 2>/dev/null || true
-          printf "\n84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_DIR/licenses/android-sdk-preview-license" 2>/dev/null || true
-          printf "\n7907f48b99f5e377b213031a7e49f8b1353acb63" > "$SDK_DIR/licenses/android-sdk-arm-dbt-license" 2>/dev/null || true
+          if [ -d "$SDK_DIR" ]; then
+            sudo mkdir -p "$SDK_DIR/licenses" 2>/dev/null || true
+            sudo chmod -R 777 "$SDK_DIR/licenses" 2>/dev/null || true
+            printf "\n89336d0b3d7730a4e8313b618456e6dcbda44770\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" | sudo tee "$SDK_DIR/licenses/android-sdk-license" >/dev/null || true
+            printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n" | sudo tee "$SDK_DIR/licenses/android-sdk-preview-license" >/dev/null || true
+            printf "\n7907f48b99f5e377b213031a7e49f8b1353acb63\n" | sudo tee "$SDK_DIR/licenses/android-sdk-arm-dbt-license" >/dev/null || true
+          fi
 
           # Create local repositories config
           mkdir -p "$HOME/.android" || true
@@ -86,14 +95,6 @@ jobs:
               break
             fi
           done
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Fix Gradlew Permissions & Line Endings
-        run: |
-          sed -i 's/\r$//' gradlew
-          chmod +x gradlew
 
       - name: Prepare Config Files (.env & google-services.json)
         run: |
@@ -153,10 +154,12 @@ jobs:
           if [ -n "$KEY_B64" ]; then
             echo "$KEY_B64" | base64 -d > my-upload-key.jks
           else
-            keytool -genkeypair -v -keystore my-upload-key.jks -alias upload \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "$STORE_PWD" -keypass "$KEY_PWD" \
-              -dname "CN=AnkiFlashcards, OU=App, O=AIStudio, C=MM"
+            if [ ! -f my-upload-key.jks ]; then
+              keytool -genkeypair -v -keystore my-upload-key.jks -alias upload \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass "$STORE_PWD" -keypass "$KEY_PWD" \
+                -dname "CN=AnkiFlashcards, OU=App, O=AIStudio, C=MM"
+            fi
           fi
           cp my-upload-key.jks app/my-upload-key.jks 2>/dev/null || true
 
@@ -170,11 +173,12 @@ jobs:
           STORE_PASSWORD: ${{ env.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         run: |
+          chmod +x gradlew
           echo "Building Release APK..."
-          ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build encountered issues, proceeding to assembleDebug..."
+          bash ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build encountered issues, proceeding to assembleDebug..."
 
           echo "Building Debug APK (guaranteed installable)..."
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          bash ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Collect Generated APKs
         run: |
