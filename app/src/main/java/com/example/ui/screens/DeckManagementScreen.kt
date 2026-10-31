@@ -364,30 +364,6 @@ fun DeckManagementScreen(
                 }
             }
         }
-
-        // Floating Action Button to Create New Deck
-        FloatingActionButton(
-            onClick = { showCreateDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp)
-                .testTag("create_deck_fab"),
-            shape = RoundedCornerShape(18.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Deck")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "New Deck",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-        }
     }
 
     // Create Deck Dialog

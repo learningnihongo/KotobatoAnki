@@ -57,13 +57,29 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Accept Android SDK Licenses & Pre-install Platform 36
+      - name: Setup Android SDK Environment & Licenses
         run: |
-          mkdir -p "$ANDROID_HOME/licenses" || true
-          echo -e "\n89336d0b3d7730a4e8313b618456e6dcbda44770\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-license"
-          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "Android SDK path: $SDK_DIR"
+          echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
 
-          for sdkman in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_HOME/cmdline-tools/13.0/bin/sdkmanager" "$ANDROID_HOME/cmdline-tools/11.0/bin/sdkmanager" "$ANDROID_HOME/tools/bin/sdkmanager"; do
+          mkdir -p "$SDK_DIR/licenses" 2>/dev/null || true
+          printf "\n89336d0b3d7730a4e8313b618456e6dcbda44770\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$SDK_DIR/licenses/android-sdk-license" 2>/dev/null || true
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_DIR/licenses/android-sdk-preview-license" 2>/dev/null || true
+          printf "\n7907f48b99f5e377b213031a7e49f8b1353acb63" > "$SDK_DIR/licenses/android-sdk-arm-dbt-license" 2>/dev/null || true
+
+          # Create local repositories config
+          mkdir -p "$HOME/.android" || true
+          touch "$HOME/.android/repositories.cfg"
+
+          # Attempt to accept all licenses with sdkmanager if available
+          for sdkman in \
+            "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" \
+            "$SDK_DIR/cmdline-tools/13.0/bin/sdkmanager" \
+            "$SDK_DIR/cmdline-tools/11.0/bin/sdkmanager" \
+            "$SDK_DIR/cmdline-tools/bin/sdkmanager" \
+            "$SDK_DIR/tools/bin/sdkmanager"; do
             if [ -x "$sdkman" ]; then
               echo "Found sdkmanager at: $sdkman"
               yes | "$sdkman" --licenses 2>/dev/null || true
@@ -79,7 +95,7 @@ jobs:
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
 
-      - name: Prepare Config Files (.env & google-services)
+      - name: Prepare Config Files (.env & google-services.json)
         run: |
           if [ ! -f .env ]; then
             cp .env.example .env 2>/dev/null || touch .env
@@ -166,7 +182,6 @@ jobs:
           echo "Locating built APKs..."
           find app/build/outputs/apk -type f -name "*.apk"
 
-          # Search for release APK
           REL_APK=$(find app/build/outputs/apk/release -type f -name "*.apk" 2>/dev/null | head -n 1)
           DBG_APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" 2>/dev/null | head -n 1)
 
@@ -179,7 +194,6 @@ jobs:
           if [ -n "$DBG_APK" ] && [ -f "$DBG_APK" ]; then
             cp "$DBG_APK" "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}-debug.apk"
             echo "Prepared Debug APK from: $DBG_APK"
-            # If release APK was not found, promote debug APK as the main APK
             if [ ! -f "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk" ]; then
               cp "$DBG_APK" "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk"
               echo "Promoted debug APK as main APK"
@@ -189,50 +203,53 @@ jobs:
           echo "Generated APK files in release-apks:"
           ls -lh release-apks/
 
+          if [ ! -f "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk" ]; then
+            echo "::error ::No APK was built!"
+            exit 1
+          fi
+
       - name: Upload APKs as GitHub Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AnkiFlashcards-${{ env.RELEASE_TAG }}
           path: release-apks/*.apk
           retention-days: 30
+          if-no-files-found: error
 
       - name: Publish GitHub Release
         id: create_release
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ env.RELEASE_TAG }}
         run: |
           echo "Publishing GitHub Release for tag: $TAG_NAME"
 
-          # Configure git author for bot commits/tags if needed
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Ensure the tag exists on remote if this was triggered from branch push or dispatch
+          # Attempt tag push if not existing
           if ! git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "Creating tag $TAG_NAME locally..."
             git tag "$TAG_NAME"
             git push origin "$TAG_NAME" 2>/dev/null || echo "Tag push skipped or already exists on remote."
           fi
 
-          # Use GitHub CLI to create or update release
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             echo "Release $TAG_NAME already exists. Uploading APK files..."
-            gh release upload "$TAG_NAME" release-apks/*.apk --clobber || echo "Asset upload warning: check repository permissions."
+            gh release upload "$TAG_NAME" release-apks/*.apk --clobber || true
           else
             echo "Creating new GitHub Release $TAG_NAME..."
             gh release create "$TAG_NAME" release-apks/*.apk \
+              --target "${{ github.sha }}" \
               --title "Release $TAG_NAME" \
               --notes "Automated APK Release for **Anki Flashcards** ($TAG_NAME)" \
               --generate-notes \
-              --latest || {
-                echo "::warning ::Release creation with gh failed. Falling back to softprops/action-gh-release..."
-                exit 1
-              }
+              --latest || echo "gh release create returned an error. Moving to fallback."
           fi
 
       - name: Fallback Release (Action-GH-Release)
-        if: failure() && steps.create_release.outcome == 'failure'
+        if: steps.create_release.outcome == 'failure' || steps.create_release.outcome == 'skipped'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -248,9 +265,17 @@ jobs:
         continue-on-error: true
 
       - name: Build Summary
+        if: always()
         run: |
           echo "=========================================="
           echo "APK BUILD & RELEASE PROCESS COMPLETED!"
           echo "Version Tag: ${{ env.RELEASE_TAG }}"
-          echo "Artifacts are accessible in the GitHub Actions run & Releases"
           echo "=========================================="
+          if [ -d release-apks ] && [ "$(ls -A release-apks)" ]; then
+            echo "Generated APK files:"
+            ls -lh release-apks/
+            echo "Status: SUCCESS - APK files are ready!"
+            echo "Artifacts are accessible in the GitHub Actions run 'Artifacts' section."
+          else
+            echo "Status: WARNING - Check previous build steps for APK generation status."
+          fi

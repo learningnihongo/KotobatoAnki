@@ -31,7 +31,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -233,18 +235,32 @@ fun VocabListScreen(
         }
 
         // FAB to add new card
-        FloatingActionButton(
+        ExtendedFloatingActionButton(
             onClick = onAddNewCard,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(24.dp)
                 .testTag("add_card_fab"),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = "Add Card")
-        }
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 6.dp,
+                pressedElevation = 10.dp
+            ),
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Card"
+                )
+            },
+            text = {
+                Text(
+                    text = "ကတ်အသစ်ထည့်မည် (Add Card)",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        )
     }
 }
 

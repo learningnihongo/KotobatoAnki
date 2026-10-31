@@ -74,11 +74,22 @@ fun StudyFlipScreen(
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "ဤ Deck တွင် Flashcard များ မရှိသေးပါ။",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "ဤ Deck (${deck.name}) တွင် Flashcard များ မရှိသေးပါ။",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Button(
+                    onClick = onBack,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("ကတ်များထည့်သွင်းရန် ပြန်သွားမည်")
+                }
+            }
         }
         return
     }

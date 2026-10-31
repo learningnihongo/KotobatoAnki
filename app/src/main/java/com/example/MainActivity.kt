@@ -39,9 +39,11 @@ import com.example.data.CardEntity
 import com.example.data.DeckEntity
 import com.example.ui.MainViewModel
 import com.example.ui.Screen
+import com.example.ui.components.AddCardSpeedDialFab
 import com.example.ui.screens.AddEditCardDialog
 import com.example.ui.screens.AddFlashcardScreen
 import com.example.ui.screens.AnkiSyncDialog
+import com.example.ui.screens.CreateOrEditDeckDialog
 import com.example.ui.screens.DeckListScreen
 import com.example.ui.screens.DeckManagementScreen
 import com.example.ui.screens.MatchGameScreen
@@ -74,6 +76,7 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
     var ankiSyncCards by remember { mutableStateOf<List<CardEntity>>(emptyList()) }
     var cardToEdit by remember { mutableStateOf<CardEntity?>(null) }
     var showAddCardDialog by remember { mutableStateOf(false) }
+    var showCreateDeckDialog by remember { mutableStateOf(false) }
 
     // Intercept hardware/system back button on sub-screens
     if (currentScreen != Screen.DASHBOARD) {
@@ -88,13 +91,10 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
             if (isTopLevelScreen) {
-                ExtendedFloatingActionButton(
-                    onClick = { viewModel.navigateTo(Screen.ADD_CARD) },
-                    modifier = Modifier.testTag("fab_add_card"),
-                    icon = { Icon(Icons.Default.Add, contentDescription = "Add Card") },
-                    text = { Text("ကတ်အသစ်ထည့်မည် (Add Card)") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                AddCardSpeedDialFab(
+                    onNavigateToAddCard = { viewModel.navigateTo(Screen.ADD_CARD) },
+                    onQuickAddCard = { showAddCardDialog = true },
+                    onCreateNewDeck = { showCreateDeckDialog = true }
                 )
             }
         },
@@ -308,7 +308,7 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
 
             // Add Card Dialog
             if (showAddCardDialog) {
-                val currentDeckId = selectedDeck?.id ?: 1L
+                val currentDeckId = selectedDeck?.id ?: allDecks.firstOrNull()?.id ?: 1L
                 AddEditCardDialog(
                     deckId = currentDeckId,
                     cardToEdit = null,
@@ -316,6 +316,18 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                     onSave = { newCard ->
                         viewModel.saveCard(newCard)
                         showAddCardDialog = false
+                    }
+                )
+            }
+
+            // Create Deck Dialog from FAB
+            if (showCreateDeckDialog) {
+                CreateOrEditDeckDialog(
+                    initialDeck = null,
+                    onDismiss = { showCreateDeckDialog = false },
+                    onConfirm = { name, desc ->
+                        viewModel.createDeck(name, desc)
+                        showCreateDeckDialog = false
                     }
                 )
             }
