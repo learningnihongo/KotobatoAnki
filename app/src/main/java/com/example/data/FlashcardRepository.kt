@@ -138,6 +138,12 @@ class FlashcardRepository(
         cardDao.updateCard(card.copy(isStarred = !card.isStarred))
     }
 
+    fun getAllStarredCardsFlow(): Flow<List<CardEntity>> = cardDao.getAllStarredCardsFlow()
+
+    suspend fun getAllStarredCards(): List<CardEntity> = cardDao.getAllStarredCards()
+
+    suspend fun getTotalStarredCardCount(): Int = cardDao.getTotalStarredCardCount()
+
     fun exportToApkg(context: Context, deck: DeckEntity, cards: List<CardEntity>): File {
         return AnkiApkgManager.exportToApkg(context, deck, cards)
     }
@@ -170,5 +176,41 @@ class FlashcardRepository(
 
     fun exportToCsvText(cards: List<CardEntity>): String {
         return AnkiApkgManager.exportToCsvText(cards)
+    }
+
+    suspend fun syncOfflineDiskBackup(context: Context) {
+        try {
+            val decks = deckDao.getAllDecks()
+            val cards = cardDao.getAllCards()
+            LocalCacheManager.saveToOfflineDiskCache(context, decks, cards)
+        } catch (e: Exception) {
+            android.util.Log.e("FlashcardRepository", "Failed to sync offline disk backup", e)
+        }
+    }
+
+    suspend fun restoreFromOfflineDiskBackupIfNeeded(context: Context): Boolean {
+        try {
+            val deckCount = deckDao.getDeckCount()
+            if (deckCount == 0) {
+                val cached = LocalCacheManager.loadFromOfflineDiskCache(context)
+                if (cached != null) {
+                    val (decks, cards) = cached
+                    for (deck in decks) {
+                        deckDao.insertDeck(deck)
+                    }
+                    cardDao.insertCards(cards)
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FlashcardRepository", "Failed to restore from offline cache", e)
+        }
+        return false
+    }
+
+    suspend fun getCacheStats(context: Context): LocalCacheManager.CacheStats {
+        val decks = deckDao.getAllDecks()
+        val cards = cardDao.getAllCards()
+        return LocalCacheManager.getCacheStats(context, decks.size, cards.size)
     }
 }

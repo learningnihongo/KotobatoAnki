@@ -159,6 +159,10 @@ fun VocabListScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val starredCount = cards.count { it.isStarred }
+            val masteredCount = cards.count { it.srsLevel == 3 }
+            val learningCount = cards.count { it.srsLevel in 1..2 }
+
             // Filter Chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -167,28 +171,28 @@ fun VocabListScreen(
                 FilterChip(
                     selected = selectedFilter == VocabFilter.ALL,
                     onClick = { selectedFilter = VocabFilter.ALL },
-                    label = { Text("အားလုံး") },
+                    label = { Text("အားလုံး (${cards.size})") },
                     shape = RoundedCornerShape(12.dp)
                 )
 
                 FilterChip(
                     selected = selectedFilter == VocabFilter.STARRED,
                     onClick = { selectedFilter = VocabFilter.STARRED },
-                    label = { Text("★ မှတ်ထားသော") },
+                    label = { Text("★ မှတ်ထားသော ($starredCount)") },
                     shape = RoundedCornerShape(12.dp)
                 )
 
                 FilterChip(
                     selected = selectedFilter == VocabFilter.MASTERED,
                     onClick = { selectedFilter = VocabFilter.MASTERED },
-                    label = { Text("ကျက်ပြီး") },
+                    label = { Text("ကျက်ပြီး ($masteredCount)") },
                     shape = RoundedCornerShape(12.dp)
                 )
 
                 FilterChip(
                     selected = selectedFilter == VocabFilter.LEARNING,
                     onClick = { selectedFilter = VocabFilter.LEARNING },
-                    label = { Text("လေ့ကျင့်ဆဲ") },
+                    label = { Text("လေ့ကျင့်ဆဲ ($learningCount)") },
                     shape = RoundedCornerShape(12.dp)
                 )
             }
@@ -203,11 +207,38 @@ fun VocabListScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "ရှာဖွေတွေ့ရှိချက် မရှိပါ",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (selectedFilter == VocabFilter.STARRED) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = GoldStar,
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Text(
+                                text = "ဤ Deck တွင် ကြယ်ပွင့် (★) မှတ်ထားသော ကတ်မရှိသေးပါ",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Text(
+                                text = "ခက်ခဲသော ဝေါဟာရများကို ကတ်ပေါ်ရှိ ★ နှိပ်၍ သီးသန့် ပြန်လည်လေ့ကျင့်နိုင်ပါသည်",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "ရှာဖွေတွေ့ရှိချက် မရှိပါ",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             } else {
                 LazyColumn(

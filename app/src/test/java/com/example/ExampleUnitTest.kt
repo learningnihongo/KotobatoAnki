@@ -7,7 +7,11 @@ import com.example.data.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(RobolectricTestRunner::class)
 class ExampleUnitTest {
     @Test
     fun `verify all 109 JLPT N3 vocabulary words exist and match`() {
@@ -137,6 +141,9 @@ class ExampleUnitTest {
             override suspend fun getCardsForDeck(deckId: Long) = fakeCards.filter { it.deckId == deckId }
             override suspend fun getCardById(cardId: Long) = fakeCards.find { it.id == cardId }
             override fun getStarredCardsFlow(deckId: Long) = kotlinx.coroutines.flow.flowOf(fakeCards.filter { it.deckId == deckId && it.isStarred })
+            override fun getAllStarredCardsFlow() = kotlinx.coroutines.flow.flowOf(fakeCards.filter { it.isStarred })
+            override suspend fun getAllStarredCards() = fakeCards.filter { it.isStarred }
+            override suspend fun getTotalStarredCardCount() = fakeCards.count { it.isStarred }
             override suspend fun getAllCards() = fakeCards
             override suspend fun insertCard(card: CardEntity): Long {
                 val newId = (fakeCards.size + 1).toLong()
@@ -176,6 +183,106 @@ class ExampleUnitTest {
         assertEquals(1, fakeCards.size)
         assertEquals("守る", fakeCards[0].kanji)
         assertEquals("လိုက်နာသည်", fakeCards[0].burmeseMeaning)
+    }
+
+    @Test
+    fun `verify LocalCacheManager offline cache serialization and restoration`() {
+        val sampleDecks = listOf(
+            DeckEntity(id = 1, name = "N3 Vocab", description = "JLPT Words", createdAt = 1000L)
+        )
+        val sampleCards = listOf(
+            CardEntity(
+                id = 10,
+                deckId = 1,
+                kanji = "約束",
+                kana = "やくそく",
+                burmeseMeaning = "ကတိ",
+                notes = "ကတိပေးသည်",
+                isStarred = true,
+                reviewCount = 2,
+                srsLevel = 2
+            )
+        )
+
+        val context = RuntimeEnvironment.getApplication()
+        LocalCacheManager.saveToOfflineDiskCache(context, sampleDecks, sampleCards)
+        val loaded = LocalCacheManager.loadFromOfflineDiskCache(context)
+
+        org.junit.Assert.assertNotNull(loaded)
+        val (loadedDecks, loadedCards) = loaded!!
+        assertEquals(1, loadedDecks.size)
+        assertEquals("N3 Vocab", loadedDecks[0].name)
+        assertEquals(1, loadedCards.size)
+        assertEquals("約束", loadedCards[0].kanji)
+        assertEquals("やくそく", loadedCards[0].kana)
+        assertEquals("ကတိ", loadedCards[0].burmeseMeaning)
+        assertTrue(loadedCards[0].isStarred)
+        assertEquals(2, loadedCards[0].srsLevel)
+    }
+
+    @Test
+    fun `verify Star and Favorite filtering for challenging cards`() = kotlinx.coroutines.runBlocking {
+        val testCards = mutableListOf(
+            CardEntity(id = 1, deckId = 1, kanji = "血液型", kana = "けつけきがた", burmeseMeaning = "သွေးအမျိုးအစား", isStarred = true),
+            CardEntity(id = 2, deckId = 1, kanji = "湖", kana = "みずうみ", burmeseMeaning = "ရေကန်", isStarred = false),
+            CardEntity(id = 3, deckId = 2, kanji = "約束", kana = "やくそく", burmeseMeaning = "ကတိ", isStarred = true)
+        )
+
+        val fakeCardDao = object : CardDao {
+            override fun getCardsForDeckFlow(deckId: Long) = kotlinx.coroutines.flow.flowOf(testCards.filter { it.deckId == deckId })
+            override suspend fun getCardsForDeck(deckId: Long) = testCards.filter { it.deckId == deckId }
+            override suspend fun getCardById(cardId: Long) = testCards.find { it.id == cardId }
+            override fun getStarredCardsFlow(deckId: Long) = kotlinx.coroutines.flow.flowOf(testCards.filter { it.deckId == deckId && it.isStarred })
+            override fun getAllStarredCardsFlow() = kotlinx.coroutines.flow.flowOf(testCards.filter { it.isStarred })
+            override suspend fun getAllStarredCards() = testCards.filter { it.isStarred }
+            override suspend fun getTotalStarredCardCount() = testCards.count { it.isStarred }
+            override suspend fun getAllCards() = testCards
+            override suspend fun insertCard(card: CardEntity): Long {
+                testCards.add(card)
+                return card.id
+            }
+            override suspend fun insertCards(cards: List<CardEntity>) = cards.map { insertCard(it) }
+            override suspend fun updateCard(card: CardEntity) {
+                val index = testCards.indexOfFirst { it.id == card.id }
+                if (index != -1) testCards[index] = card
+            }
+            override suspend fun deleteCard(card: CardEntity) { testCards.removeIf { it.id == card.id } }
+            override suspend fun deleteCardsForDeck(deckId: Long) { testCards.removeIf { it.deckId == deckId } }
+            override suspend fun getCardCountForDeck(deckId: Long) = testCards.count { it.deckId == deckId }
+            override suspend fun getMasteredCardCountForDeck(deckId: Long) = testCards.count { it.deckId == deckId && it.srsLevel == 3 }
+        }
+
+        val dummyDeckDao = object : DeckDao {
+            override fun getAllDecksFlow() = kotlinx.coroutines.flow.flowOf(emptyList<DeckEntity>())
+            override suspend fun getAllDecks() = emptyList<DeckEntity>()
+            override suspend fun getDeckById(deckId: Long): DeckEntity? = null
+            override suspend fun insertDeck(deck: DeckEntity): Long = 1L
+            override suspend fun updateDeck(deck: DeckEntity) {}
+            override suspend fun deleteDeck(deck: DeckEntity) {}
+            override suspend fun getDeckCount(): Int = 0
+        }
+
+        val repository = FlashcardRepository(dummyDeckDao, fakeCardDao)
+
+        // Verify initial starred cards
+        val initialStarred = repository.getAllStarredCards()
+        assertEquals(2, initialStarred.size)
+        assertEquals(2, repository.getTotalStarredCardCount())
+        assertTrue(initialStarred.any { it.kanji == "血液型" })
+        assertTrue(initialStarred.any { it.kanji == "約束" })
+
+        // Toggle star on Card 2 (was false -> now true)
+        val card2 = testCards.find { it.id == 2L }!!
+        repository.toggleStar(card2)
+        assertEquals(3, repository.getTotalStarredCardCount())
+
+        // Toggle star on Card 1 (was true -> now false)
+        val card1 = testCards.find { it.id == 1L }!!
+        repository.toggleStar(card1)
+        assertEquals(2, repository.getTotalStarredCardCount())
+        val updatedStarred = repository.getAllStarredCards()
+        assertTrue(updatedStarred.none { it.kanji == "血液型" })
+        assertTrue(updatedStarred.any { it.kanji == "湖" })
     }
 }
 

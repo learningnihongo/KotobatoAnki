@@ -46,6 +46,15 @@ interface CardDao {
     @Query("SELECT * FROM cards WHERE deckId = :deckId AND isStarred = 1")
     fun getStarredCardsFlow(deckId: Long): Flow<List<CardEntity>>
 
+    @Query("SELECT * FROM cards WHERE isStarred = 1 ORDER BY id DESC")
+    fun getAllStarredCardsFlow(): Flow<List<CardEntity>>
+
+    @Query("SELECT * FROM cards WHERE isStarred = 1 ORDER BY id DESC")
+    suspend fun getAllStarredCards(): List<CardEntity>
+
+    @Query("SELECT COUNT(*) FROM cards WHERE isStarred = 1")
+    suspend fun getTotalStarredCardCount(): Int
+
     @Query("SELECT * FROM cards")
     suspend fun getAllCards(): List<CardEntity>
 

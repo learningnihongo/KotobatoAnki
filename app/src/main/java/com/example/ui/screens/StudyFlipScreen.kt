@@ -20,10 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,6 +40,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +60,7 @@ import com.example.data.DeckEntity
 import com.example.ui.components.FlipCard
 import com.example.ui.theme.AgainRed
 import com.example.ui.theme.EasyGreen
+import com.example.ui.theme.GoldStar
 import com.example.ui.theme.GoodBlue
 import com.example.ui.theme.HardOrange
 
@@ -94,19 +100,81 @@ fun StudyFlipScreen(
         return
     }
 
-    var studyList by remember(cards) { mutableStateOf(cards) }
+    var filterStarredOnly by remember { mutableStateOf(false) }
+
+    val activeList = remember(cards, filterStarredOnly) {
+        if (filterStarredOnly) cards.filter { it.isStarred } else cards
+    }
+
+    var studyList by remember(activeList) { mutableStateOf(activeList) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var isFlipped by remember { mutableStateOf(false) }
     var isCompleted by remember { mutableStateOf(false) }
     var studiedCount by remember { mutableIntStateOf(0) }
+    var isAutoAudioEnabled by remember { mutableStateOf(false) }
+
+    if (studyList.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = GoldStar.copy(alpha = 0.15f),
+                    modifier = Modifier.size(80.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = GoldStar,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "ဤ Deck တွင် ကြယ်ပွင့် (★) မှတ်ထားသော ကတ်မရှိသေးပါ",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "ခက်ခဲသော ဝေါဟာရများကို ကတ်ပေါ်ရှိ ကြယ်ပွင့် (★) နှိပ်၍ သီးသန့် လေ့ကျင့်နိုင်ပါသည်",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Button(
+                    onClick = { filterStarredOnly = false },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("ကတ်များအားလုံး ပြန်လည်လေ့ကျင့်မည်")
+                }
+            }
+        }
+        return
+    }
 
     val currentCard = studyList.getOrNull(currentIndex)
+
+    // Automatically speak Japanese term when card loads if Auto-Audio is enabled
+    LaunchedEffect(currentCard?.id, isAutoAudioEnabled) {
+        if (isAutoAudioEnabled && !isFlipped && currentCard != null) {
+            val term = if (currentCard.kana.isNotBlank()) currentCard.kana else currentCard.kanji
+            onSpeak(term)
+        }
+    }
 
     if (isCompleted || currentCard == null) {
         // Study Completed Summary View
         SessionCompleteView(
             totalStudied = studiedCount,
-            deckName = deck.name,
+            deckName = if (filterStarredOnly) "★ ${deck.name} (Starred)" else deck.name,
             onRestart = {
                 currentIndex = 0
                 isFlipped = false
@@ -124,7 +192,7 @@ fun StudyFlipScreen(
             .padding(horizontal = 20.dp, vertical = 12.dp)
             .testTag("study_flip_screen")
     ) {
-        // Top Bar: Navigation + Progress
+        // Top Bar: Navigation + Progress + Audio Toggle + Shuffle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -153,19 +221,50 @@ fun StudyFlipScreen(
                 )
             }
 
-            IconButton(
-                onClick = {
-                    studyList = studyList.shuffled()
-                    currentIndex = 0
-                    isFlipped = false
-                },
-                modifier = Modifier.testTag("study_shuffle_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shuffle,
-                    contentDescription = "Shuffle cards",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Starred / Challenging Only Filter Button
+                val starredCount = cards.count { it.isStarred }
+                IconButton(
+                    onClick = {
+                        filterStarredOnly = !filterStarredOnly
+                        currentIndex = 0
+                        isFlipped = false
+                    },
+                    modifier = Modifier.testTag("study_filter_starred_toggle")
+                ) {
+                    Icon(
+                        imageVector = if (filterStarredOnly) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                        contentDescription = "Filter Starred Only ($starredCount)",
+                        tint = if (filterStarredOnly) GoldStar else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+
+                // Auto Audio Toggle Button
+                IconButton(
+                    onClick = { isAutoAudioEnabled = !isAutoAudioEnabled },
+                    modifier = Modifier.testTag("study_auto_audio_toggle")
+                ) {
+                    Icon(
+                        imageVector = if (isAutoAudioEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = "Auto audio toggle",
+                        tint = if (isAutoAudioEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        studyList = studyList.shuffled()
+                        currentIndex = 0
+                        isFlipped = false
+                    },
+                    modifier = Modifier.testTag("study_shuffle_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = "Shuffle cards",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 

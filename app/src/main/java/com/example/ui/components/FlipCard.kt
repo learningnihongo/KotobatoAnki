@@ -338,11 +338,15 @@ private fun CardFrontContent(
                 }
             }
 
+            val termToSpeak = if (card.kana.isNotBlank()) card.kana else card.kanji
+
             // Right icons: TTS Audio & Star
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = { onSpeak(if (card.kanji.isNotBlank()) card.kanji else card.kana) },
-                    modifier = Modifier.size(40.dp)
+                    onClick = { onSpeak(termToSpeak) },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("card_front_top_speak_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.VolumeUp,
@@ -365,6 +369,8 @@ private fun CardFrontContent(
         }
 
         // Center Content: Japanese Word / Kanji & Reading
+        val termToSpeak = if (card.kana.isNotBlank()) card.kana else card.kanji
+
         Column(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -381,12 +387,16 @@ private fun CardFrontContent(
                             fontWeight = FontWeight.SemiBold
                         ),
                         color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSpeak(termToSpeak) }
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                 }
 
-                // Main Kanji
+                // Main Kanji (Clickable to speak)
                 Text(
                     text = card.kanji,
                     style = MaterialTheme.typography.displayMedium.copy(
@@ -394,10 +404,14 @@ private fun CardFrontContent(
                         fontWeight = FontWeight.Bold
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSpeak(termToSpeak) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             } else {
-                // Kana only
+                // Kana only (Clickable to speak)
                 Text(
                     text = card.kana,
                     style = MaterialTheme.typography.displayMedium.copy(
@@ -405,8 +419,47 @@ private fun CardFrontContent(
                         fontWeight = FontWeight.Bold
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSpeak(termToSpeak) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Dedicated Audio Play Button on Card Front
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                tonalElevation = 2.dp,
+                shadowElevation = 3.dp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable { onSpeak(termToSpeak) }
+                    .testTag("front_audio_play_button")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Play Audio",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "အသံဖွင့်မည် (Play Audio)",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
         }
 

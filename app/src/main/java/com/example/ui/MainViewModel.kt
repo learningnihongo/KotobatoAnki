@@ -7,6 +7,8 @@ import com.example.data.AppDatabase
 import com.example.data.CardEntity
 import com.example.data.DeckEntity
 import com.example.data.FlashcardRepository
+import com.example.data.LocalCacheManager
+import com.example.util.NetworkMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,13 +25,19 @@ enum class Screen {
     QUIZ_GAME,
     MATCH_GAME,
     VOCAB_LIST,
-    ADD_CARD
+    ADD_CARD,
+    STARRED_LIST
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application, viewModelScope)
     val repository = FlashcardRepository(database.deckDao(), database.cardDao(), database.flashcardDao())
     val soundHelper = SoundHelper(application)
+    val networkMonitor = NetworkMonitor(application)
+    val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
+
+    private val _cacheStats = MutableStateFlow<LocalCacheManager.CacheStats?>(null)
+    val cacheStats: StateFlow<LocalCacheManager.CacheStats?> = _cacheStats.asStateFlow()
 
     private val _currentScreen = MutableStateFlow(Screen.DASHBOARD)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
@@ -43,6 +51,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         emptyList()
     )
     val allDecks: StateFlow<List<DeckEntity>> = _allDecks
+
+    // Reactive list of all starred cards across all decks
+    val allStarredCards: StateFlow<List<CardEntity>> = repository.getAllStarredCardsFlow().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
 
     // Map of deckId to List<CardEntity>
     private val _cardsByDeck = MutableStateFlow<Map<Long, List<CardEntity>>>(emptyMap())
@@ -61,6 +76,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
 
     init {
+        // First restore from offline cache if local DB was freshly initialized and empty
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.restoreFromOfflineDiskBackupIfNeeded(application)
+            _cacheStats.value = repository.getCacheStats(application)
+        }
+
         // Observe decks and refresh cards
         viewModelScope.launch {
             allDecks.collect { decks ->
@@ -84,6 +105,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (curDeckId != null) {
             _currentDeckCards.value = map[curDeckId] ?: emptyList()
         }
+
+        // Always keep the secondary offline disk backup perfectly updated
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.syncOfflineDiskBackup(getApplication())
+            _cacheStats.value = repository.getCacheStats(getApplication())
+        }
     }
 
     fun navigateTo(screen: Screen, deck: DeckEntity? = null) {
@@ -96,6 +123,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun navigateBack() {
         _currentScreen.value = Screen.DASHBOARD
+    }
+
+    fun studyStarredCards(customCards: List<CardEntity>? = null) {
+        val targetCards = customCards ?: allStarredCards.value
+        if (targetCards.isNotEmpty()) {
+            val virtualDeck = DeckEntity(
+                id = -999L,
+                name = "★ Starred Cards",
+                description = "Challenging vocabulary review"
+            )
+            _selectedDeck.value = virtualDeck
+            _currentDeckCards.value = targetCards
+            _currentScreen.value = Screen.STUDY_FLIP
+        }
+    }
+
+    fun quizStarredCards(customCards: List<CardEntity>? = null) {
+        val targetCards = customCards ?: allStarredCards.value
+        if (targetCards.isNotEmpty()) {
+            val virtualDeck = DeckEntity(
+                id = -999L,
+                name = "★ Starred Cards",
+                description = "Challenging vocabulary review"
+            )
+            _selectedDeck.value = virtualDeck
+            _currentDeckCards.value = targetCards
+            _currentScreen.value = Screen.QUIZ_GAME
+        }
     }
 
     fun rateCard(card: CardEntity, rating: Int) {
@@ -186,5 +241,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         soundHelper.shutdown()
+        networkMonitor.unregister()
     }
 }

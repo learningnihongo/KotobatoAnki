@@ -17,7 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Casino
@@ -76,7 +78,8 @@ fun DeckListScreen(
     onOpenAnkiSync: (DeckEntity, List<CardEntity>) -> Unit,
     onCreateDeck: (String, String) -> Unit,
     onDeleteDeck: (DeckEntity) -> Unit,
-    onNavigateToDeckManager: () -> Unit
+    onNavigateToDeckManager: () -> Unit,
+    onOpenStarredReview: () -> Unit = {}
 ) {
     var showCreateDeckDialog by remember { mutableStateOf(false) }
 
@@ -133,26 +136,54 @@ fun DeckListScreen(
                                 )
                             }
 
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = GoldStar.copy(alpha = 0.3f)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color.White.copy(alpha = 0.25f)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SyncAlt,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Anki .apkg Ready",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Offline Ready",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = GoldStar.copy(alpha = 0.3f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SyncAlt,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Anki Ready",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = Color.White
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -182,9 +213,85 @@ fun DeckListScreen(
                         ) {
                             StatPill(count = "$totalCount", label = "ဝေါဟာရစုစုပေါင်း")
                             StatPill(count = "$masteredCount", label = "ကျက်ပြီး (Mastered)")
-                            StatPill(count = "$starredCount", label = "★ မှတ်ထားသော")
+                            StatPill(
+                                count = "$starredCount",
+                                label = "★ မှတ်ထားသော",
+                                onClick = onOpenStarredReview
+                            )
                         }
                     }
+                }
+            }
+        }
+
+        // Starred Cards Review Banner Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenStarredReview() }
+                    .testTag("starred_review_banner_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = GoldStar.copy(alpha = 0.12f)
+                ),
+                border = BorderStroke(1.dp, GoldStar.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = GoldStar.copy(alpha = 0.25f),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = GoldStar,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ခက်ခဲသောကတ်များ (Starred)",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = GoldStar.copy(alpha = 0.3f)
+                            ) {
+                                Text(
+                                    text = "$starredCount ခု",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "ပြန်လည်လေ့ကျင့်ရန် မှတ်ထားသောကတ်များကို သီးသန့်စာရင်းဖြင့် ကြည့်ရှု/လေ့ကျင့်မည်",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open Starred Cards",
+                        tint = GoldStar
+                    )
                 }
             }
         }
@@ -374,10 +481,15 @@ fun DeckListScreen(
 }
 
 @Composable
-private fun StatPill(count: String, label: String) {
+private fun StatPill(
+    count: String,
+    label: String,
+    onClick: (() -> Unit)? = null
+) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.White.copy(alpha = 0.15f)
+        color = Color.White.copy(alpha = 0.15f),
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),

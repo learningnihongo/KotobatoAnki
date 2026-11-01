@@ -6,11 +6,24 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import kotlinx.coroutines.launch
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
@@ -23,7 +36,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +63,7 @@ import com.example.ui.screens.AnkiSyncDialog
 import com.example.ui.screens.FormatGuideDialog
 import com.example.ui.screens.CreateOrEditDeckDialog
 import com.example.ui.screens.DeckListScreen
+import com.example.ui.screens.StarredCardsScreen
 import com.example.ui.screens.DeckManagementScreen
 import com.example.ui.screens.MatchGameScreen
 import com.example.ui.screens.QuizGameScreen
@@ -74,6 +90,8 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
     val selectedDeck by viewModel.selectedDeck.collectAsState()
     val cardsByDeck by viewModel.cardsByDeck.collectAsState()
     val currentDeckCards by viewModel.currentDeckCards.collectAsState()
+    val allStarredCards by viewModel.allStarredCards.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -180,12 +198,52 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->
+            // Offline Notification Banner
+            AnimatedVisibility(
+                visible = !isOnline,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    tonalElevation = 3.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("offline_status_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudOff,
+                            contentDescription = "Offline Mode",
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "အော့ဖ်လိုင်းစနစ် (Offline Mode) • အင်တာနက်မရှိဘဲ ကတ်များအားလုံး ဖုန်းထဲတွင် အပြည့်အဝ အသုံးပြုနိုင်ပါသည်",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) {
+                Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->
                 when (screen) {
                     Screen.DASHBOARD -> {
                         DeckListScreen(
@@ -215,6 +273,9 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             },
                             onNavigateToDeckManager = {
                                 viewModel.navigateTo(Screen.DECKS_MANAGER)
+                            },
+                            onOpenStarredReview = {
+                                viewModel.navigateTo(Screen.STARRED_LIST)
                             }
                         )
                     }
@@ -311,6 +372,24 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             onBack = { viewModel.navigateBack() }
                         )
                     }
+
+                    Screen.STARRED_LIST -> {
+                        StarredCardsScreen(
+                            starredCards = allStarredCards,
+                            decks = allDecks,
+                            onSpeak = { text -> viewModel.soundHelper.speakJapanese(text) },
+                            onToggleStar = { card -> viewModel.toggleStar(card) },
+                            onEditCard = { card -> cardToEdit = card },
+                            onDeleteCard = { card -> viewModel.deleteCard(card) },
+                            onStudyStarred = { cardsToStudy ->
+                                viewModel.studyStarredCards(cardsToStudy)
+                            },
+                            onQuizStarred = { cardsToQuiz ->
+                                viewModel.quizStarredCards(cardsToQuiz)
+                            },
+                            onBack = { viewModel.navigateBack() }
+                        )
+                    }
                 }
             }
 
@@ -393,4 +472,5 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
             }
         }
     }
+}
 }
