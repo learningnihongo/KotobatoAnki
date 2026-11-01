@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.SyncAlt
@@ -66,6 +67,7 @@ import com.example.data.CardEntity
 import com.example.data.DeckEntity
 import com.example.ui.theme.EasyGreen
 import com.example.ui.theme.GoldStar
+import com.example.ui.theme.HardOrange
 
 @Composable
 fun DeckListScreen(
@@ -79,7 +81,8 @@ fun DeckListScreen(
     onCreateDeck: (String, String) -> Unit,
     onDeleteDeck: (DeckEntity) -> Unit,
     onNavigateToDeckManager: () -> Unit,
-    onOpenStarredReview: () -> Unit = {}
+    onOpenStarredReview: () -> Unit = {},
+    onSelectDeckForShuffleStudy: (DeckEntity) -> Unit = {}
 ) {
     var showCreateDeckDialog by remember { mutableStateOf(false) }
 
@@ -307,42 +310,61 @@ fun DeckListScreen(
 
         item {
             val primaryDeck = decks.firstOrNull()
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Game 1: SRS Flip Card
-                GameModeCard(
-                    title = "SRS Flashcard",
-                    subTitle = "ကတ်လှန်လေ့ကျင့်ခန်း",
-                    icon = Icons.Default.Style,
-                    color = MaterialTheme.colorScheme.primary,
-                    tag = "launch_study_flip_button",
-                    modifier = Modifier.weight(1f),
-                    onClick = { primaryDeck?.let { onSelectDeckForStudy(it) } }
-                )
+                // Row 1: SRS Flip & Shuffle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GameModeCard(
+                        title = "SRS Flashcard",
+                        subTitle = "ကတ်လှန်လေ့ကျင့်ခန်း",
+                        icon = Icons.Default.Style,
+                        color = MaterialTheme.colorScheme.primary,
+                        tag = "launch_study_flip_button",
+                        modifier = Modifier.weight(1f),
+                        onClick = { primaryDeck?.let { onSelectDeckForStudy(it) } }
+                    )
 
-                // Game 2: Speed Quiz
-                GameModeCard(
-                    title = "Speed Quiz",
-                    subTitle = "အမြန်ဖြေ ၄ ရွေးချယ်",
-                    icon = Icons.Default.Quiz,
-                    color = MaterialTheme.colorScheme.secondary,
-                    tag = "launch_quiz_game_button",
-                    modifier = Modifier.weight(1f),
-                    onClick = { primaryDeck?.let { onSelectDeckForQuiz(it) } }
-                )
+                    GameModeCard(
+                        title = "Shuffle Cards",
+                        subTitle = "ကျပန်းမွှေလေ့ကျင့်",
+                        icon = Icons.Default.Shuffle,
+                        color = HardOrange,
+                        tag = "launch_shuffle_study_button",
+                        modifier = Modifier.weight(1f),
+                        onClick = { primaryDeck?.let { onSelectDeckForShuffleStudy(it) } }
+                    )
+                }
 
-                // Game 3: Match Memory
-                GameModeCard(
-                    title = "Match Pairs",
-                    subTitle = "အတွဲစပ်ဂိမ်း",
-                    icon = Icons.Default.GridView,
-                    color = EasyGreen,
-                    tag = "launch_match_game_button",
-                    modifier = Modifier.weight(1f),
-                    onClick = { primaryDeck?.let { onSelectDeckForMatch(it) } }
-                )
+                // Row 2: Speed Quiz & Match Pairs
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GameModeCard(
+                        title = "Speed Quiz",
+                        subTitle = "အမြန်ဖြေ ၄ ရွေးချယ်",
+                        icon = Icons.Default.Quiz,
+                        color = MaterialTheme.colorScheme.secondary,
+                        tag = "launch_quiz_game_button",
+                        modifier = Modifier.weight(1f),
+                        onClick = { primaryDeck?.let { onSelectDeckForQuiz(it) } }
+                    )
+
+                    GameModeCard(
+                        title = "Match Pairs",
+                        subTitle = "အတွဲစပ်ဂိမ်း",
+                        icon = Icons.Default.GridView,
+                        color = EasyGreen,
+                        tag = "launch_match_game_button",
+                        modifier = Modifier.weight(1f),
+                        onClick = { primaryDeck?.let { onSelectDeckForMatch(it) } }
+                    )
+                }
             }
         }
 

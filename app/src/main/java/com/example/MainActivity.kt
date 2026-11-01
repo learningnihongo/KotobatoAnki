@@ -276,6 +276,9 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             },
                             onOpenStarredReview = {
                                 viewModel.navigateTo(Screen.STARRED_LIST)
+                            },
+                            onSelectDeckForShuffleStudy = { deck ->
+                                viewModel.startShuffledStudy(deck)
                             }
                         )
                     }

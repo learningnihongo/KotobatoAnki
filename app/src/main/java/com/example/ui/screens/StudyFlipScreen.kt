@@ -1,7 +1,13 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -112,6 +120,31 @@ fun StudyFlipScreen(
     var isCompleted by remember { mutableStateOf(false) }
     var studiedCount by remember { mutableIntStateOf(0) }
     var isAutoAudioEnabled by remember { mutableStateOf(false) }
+    var isShuffled by remember { mutableStateOf(false) }
+    var showShuffleToast by remember { mutableStateOf(false) }
+    var shuffleRotationAngle by remember { mutableFloatStateOf(0f) }
+
+    val animatedShuffleAngle by animateFloatAsState(
+        targetValue = shuffleRotationAngle,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "shuffle_angle"
+    )
+
+    val doShuffle = {
+        studyList = studyList.shuffled()
+        currentIndex = 0
+        isFlipped = false
+        isShuffled = true
+        shuffleRotationAngle += 360f
+        showShuffleToast = true
+    }
+
+    LaunchedEffect(showShuffleToast) {
+        if (showShuffleToast) {
+            kotlinx.coroutines.delay(2200)
+            showShuffleToast = false
+        }
+    }
 
     if (studyList.isEmpty()) {
         Box(
@@ -209,11 +242,27 @@ fun StudyFlipScreen(
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "${currentIndex + 1} / ${studyList.size}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${currentIndex + 1} / ${studyList.size}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isShuffled) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = EasyGreen.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "🔀 Shuffled",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = EasyGreen,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = deck.name,
                     style = MaterialTheme.typography.bodySmall,
@@ -252,17 +301,14 @@ fun StudyFlipScreen(
                 }
 
                 IconButton(
-                    onClick = {
-                        studyList = studyList.shuffled()
-                        currentIndex = 0
-                        isFlipped = false
-                    },
+                    onClick = doShuffle,
                     modifier = Modifier.testTag("study_shuffle_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = "Shuffle cards",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = if (isShuffled) EasyGreen else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.graphicsLayer { rotationZ = animatedShuffleAngle }
                     )
                 }
             }
@@ -321,6 +367,41 @@ fun StudyFlipScreen(
                     color = EasyGreen,
                     fontWeight = FontWeight.SemiBold
                 )
+            }
+        }
+
+        // Shuffle Notification Banner
+        AnimatedVisibility(
+            visible = showShuffleToast,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 2.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .testTag("shuffle_notification_banner")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "ကတ် ${studyList.size} ခုကို ကျပန်းမွှေပြီးပါပြီ 🔀",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
         }
 
@@ -467,10 +548,11 @@ fun StudyFlipScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Prev / Next quick navigation
+        // Prev / Next quick navigation + Shuffle Button
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
                 onClick = {
@@ -483,6 +565,27 @@ fun StudyFlipScreen(
                 modifier = Modifier.testTag("nav_prev_card")
             ) {
                 Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous")
+            }
+
+            // Dedicated Shuffle Action Button
+            OutlinedButton(
+                onClick = doShuffle,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.testTag("shuffle_cards_bottom_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = animatedShuffleAngle },
+                    tint = if (isShuffled) EasyGreen else MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isShuffled) "ပြန်မွှေမည် (Reshuffle)" else "ကျပန်းမွှေမည် (Shuffle)",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                )
             }
 
             IconButton(

@@ -125,6 +125,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = Screen.DASHBOARD
     }
 
+    fun startShuffledStudy(deck: DeckEntity) {
+        _selectedDeck.value = deck
+        val cards = (_cardsByDeck.value[deck.id] ?: emptyList()).shuffled()
+        _currentDeckCards.value = cards
+        _currentScreen.value = Screen.STUDY_FLIP
+    }
+
     fun studyStarredCards(customCards: List<CardEntity>? = null) {
         val targetCards = customCards ?: allStarredCards.value
         if (targetCards.isNotEmpty()) {

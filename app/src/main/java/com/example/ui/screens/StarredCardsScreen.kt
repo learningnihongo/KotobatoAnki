@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.Star
@@ -172,7 +173,7 @@ fun StarredCardsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = { onStudyStarred(filteredCards) },
@@ -185,10 +186,26 @@ fun StarredCardsScreen(
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("ကတ်လှန်ကျက်မည်")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ကတ်ကျက်မည်", maxLines = 1)
+                        }
+
+                        OutlinedButton(
+                            onClick = { onStudyStarred(filteredCards.shuffled()) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("shuffle_study_starred_button"),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ကျပန်းမွှေကျက်", maxLines = 1)
                         }
 
                         OutlinedButton(
@@ -201,10 +218,10 @@ fun StarredCardsScreen(
                             Icon(
                                 imageVector = Icons.Default.Quiz,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Quiz ဖြေမည်")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Quiz", maxLines = 1)
                         }
                     }
                 }
