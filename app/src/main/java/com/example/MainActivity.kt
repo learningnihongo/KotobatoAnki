@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import kotlinx.coroutines.launch
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,10 +40,12 @@ import com.example.data.CardEntity
 import com.example.data.DeckEntity
 import com.example.ui.MainViewModel
 import com.example.ui.Screen
-import com.example.ui.components.AddCardSpeedDialFab
+import com.example.ui.components.AddCardModernFab
+import com.example.ui.components.AddCardOptionsBottomSheet
 import com.example.ui.screens.AddEditCardDialog
 import com.example.ui.screens.AddFlashcardScreen
 import com.example.ui.screens.AnkiSyncDialog
+import com.example.ui.screens.FormatGuideDialog
 import com.example.ui.screens.CreateOrEditDeckDialog
 import com.example.ui.screens.DeckListScreen
 import com.example.ui.screens.DeckManagementScreen
@@ -72,11 +75,34 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
     val cardsByDeck by viewModel.cardsByDeck.collectAsState()
     val currentDeckCards by viewModel.currentDeckCards.collectAsState()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
     var ankiSyncDeck by remember { mutableStateOf<DeckEntity?>(null) }
     var ankiSyncCards by remember { mutableStateOf<List<CardEntity>>(emptyList()) }
     var cardToEdit by remember { mutableStateOf<CardEntity?>(null) }
     var showAddCardDialog by remember { mutableStateOf(false) }
     var showCreateDeckDialog by remember { mutableStateOf(false) }
+    var showAddCardBottomSheet by remember { mutableStateOf(false) }
+    var showFormatGuideDialog by remember { mutableStateOf(false) }
+
+    val fileImportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val (newDeck, count) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        viewModel.repository.importFromUri(context, uri)
+                    }
+                    android.widget.Toast.makeText(context, "${newDeck.name} မှ ကတ် ${count} ခု ထည့်သွင်းပြီးပါပြီ!", android.widget.Toast.LENGTH_LONG).show()
+                    viewModel.onImportDone()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "သွင်းယူမှု မအောင်မြင်ပါ: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     // Intercept hardware/system back button on sub-screens
     if (currentScreen != Screen.DASHBOARD) {
@@ -91,10 +117,8 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
             if (isTopLevelScreen) {
-                AddCardSpeedDialFab(
-                    onNavigateToAddCard = { viewModel.navigateTo(Screen.ADD_CARD) },
-                    onQuickAddCard = { showAddCardDialog = true },
-                    onCreateNewDeck = { showCreateDeckDialog = true }
+                AddCardModernFab(
+                    onClick = { showAddCardBottomSheet = true }
                 )
             }
         },
@@ -341,6 +365,29 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                     onSave = { updatedCard ->
                         viewModel.saveCard(updatedCard)
                         cardToEdit = null
+                    }
+                )
+            }
+
+            // Add Card Options Bottom Sheet
+            if (showAddCardBottomSheet) {
+                AddCardOptionsBottomSheet(
+                    onDismiss = { showAddCardBottomSheet = false },
+                    onQuickAddCard = { showAddCardDialog = true },
+                    onNavigateToAddCard = { viewModel.navigateTo(Screen.ADD_CARD) },
+                    onImportFile = { fileImportLauncher.launch(arrayOf("*/*")) },
+                    onShowFormatGuide = { showFormatGuideDialog = true },
+                    onCreateNewDeck = { showCreateDeckDialog = true }
+                )
+            }
+
+            // Standalone Format Guide Dialog
+            if (showFormatGuideDialog) {
+                FormatGuideDialog(
+                    onDismiss = { showFormatGuideDialog = false },
+                    onImportClick = {
+                        showFormatGuideDialog = false
+                        fileImportLauncher.launch(arrayOf("*/*"))
                     }
                 )
             }

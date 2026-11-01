@@ -31,10 +31,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fix Gradlew Permissions & Line Endings
+      - name: Validate or Restore Gradle Wrapper Jar
         run: |
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
+          mkdir -p gradle/wrapper
+
+          # Verify if gradle-wrapper.jar is a valid ZIP/JAR archive
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ] || ! jar tf gradle/wrapper/gradle-wrapper.jar >/dev/null 2>&1; then
+            echo "Gradle wrapper jar is missing or corrupted. Downloading fresh Gradle 9.3.1 wrapper..."
+            curl -sSLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar || \
+            curl -sSLo gradle/wrapper/gradle-wrapper.jar https://repo.maven.apache.org/maven2/org/gradle/gradle-wrapper/9.3.1/gradle-wrapper-9.3.1.jar
+          fi
+          echo "Verified gradle-wrapper.jar size: $(wc -c < gradle/wrapper/gradle-wrapper.jar) bytes"
 
       - name: Determine Version Tag
         id: versioning
@@ -73,28 +82,23 @@ jobs:
           if [ -d "$SDK_DIR" ]; then
             sudo mkdir -p "$SDK_DIR/licenses" 2>/dev/null || true
             sudo chmod -R 777 "$SDK_DIR/licenses" 2>/dev/null || true
-            printf "\n89336d0b3d7730a4e8313b618456e6dcbda44770\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n" | sudo tee "$SDK_DIR/licenses/android-sdk-license" >/dev/null || true
-            printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n" | sudo tee "$SDK_DIR/licenses/android-sdk-preview-license" >/dev/null || true
+            printf "\n89336d0b3d7730a4e8313b618456e6dcbda44770\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n601085b94cd77f0b54ff86406955dce9b62670d2\n" | sudo tee "$SDK_DIR/licenses/android-sdk-license" >/dev/null || true
+            printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b816f454d0e\n" | sudo tee "$SDK_DIR/licenses/android-sdk-preview-license" >/dev/null || true
             printf "\n7907f48b99f5e377b213031a7e49f8b1353acb63\n" | sudo tee "$SDK_DIR/licenses/android-sdk-arm-dbt-license" >/dev/null || true
+            printf "\n601085b94cd77f0b54ff86406955dce9b62670d2\n" | sudo tee "$SDK_DIR/licenses/android-googletv-license" >/dev/null || true
           fi
 
-          # Create local repositories config
           mkdir -p "$HOME/.android" || true
           touch "$HOME/.android/repositories.cfg"
 
-          # Attempt to accept all licenses with sdkmanager if available
-          for sdkman in \
-            "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" \
-            "$SDK_DIR/cmdline-tools/13.0/bin/sdkmanager" \
-            "$SDK_DIR/cmdline-tools/11.0/bin/sdkmanager" \
-            "$SDK_DIR/cmdline-tools/bin/sdkmanager" \
-            "$SDK_DIR/tools/bin/sdkmanager"; do
-            if [ -x "$sdkman" ]; then
-              echo "Found sdkmanager at: $sdkman"
-              yes | "$sdkman" --licenses 2>/dev/null || true
-              break
-            fi
-          done
+          # Pre-install platforms;android-36 and build-tools via sdkmanager if available
+          SDKMAN="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMAN" ]; then
+            echo "Accepting licenses with sdkmanager..."
+            yes | "$SDKMAN" --licenses 2>/dev/null || true
+            echo "Installing platform 36..."
+            "$SDKMAN" "platforms;android-36" "build-tools;36.0.0" 2>/dev/null || true
+          fi
 
       - name: Prepare Config Files (.env & google-services.json)
         run: |
@@ -174,11 +178,11 @@ jobs:
           KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          echo "Building Release APK..."
-          bash ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build encountered issues, proceeding to assembleDebug..."
-
           echo "Building Debug APK (guaranteed installable)..."
           bash ./gradlew assembleDebug --no-daemon --stacktrace
+
+          echo "Building Release APK..."
+          bash ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build encountered signing/compilation issues, debug APK will be used as release asset."
 
       - name: Collect Generated APKs
         run: |
@@ -201,6 +205,15 @@ jobs:
             if [ ! -f "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk" ]; then
               cp "$DBG_APK" "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk"
               echo "Promoted debug APK as main APK"
+            fi
+          fi
+
+          # Fallback: copy any built apk if still missing
+          if [ ! -f "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk" ]; then
+            ANY_APK=$(find app/build/outputs/apk -type f -name "*.apk" 2>/dev/null | head -n 1)
+            if [ -n "$ANY_APK" ] && [ -f "$ANY_APK" ]; then
+              cp "$ANY_APK" "release-apks/AnkiFlashcards-${{ env.RELEASE_TAG }}.apk"
+              echo "Copied fallback APK from: $ANY_APK"
             fi
           fi
 

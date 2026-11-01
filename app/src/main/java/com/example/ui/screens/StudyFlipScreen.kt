@@ -183,9 +183,51 @@ fun StudyFlipScreen(
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Gesture Guide Bar
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "👈 ဘယ်သို့ဆွဲ (Again)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = AgainRed,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "•",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "👆 နှိပ်/ပွတ် (လှန်မည်)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "•",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "ညာသို့ဆွဲ (Good) 👉",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = EasyGreen,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
 
-        // Main 3D Flip Card Container
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Main 3D Flip Card Container with Swipe Gestures
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -197,11 +239,27 @@ fun StudyFlipScreen(
                 onFlip = { isFlipped = !isFlipped },
                 onSpeak = onSpeak,
                 onToggleStar = { onToggleStar(currentCard) },
+                onSwipeRight = {
+                    onRateCard(currentCard, 3)
+                    studiedCount++
+                    goToNextCard(studyList.size, currentIndex) { next ->
+                        currentIndex = next
+                        isFlipped = false
+                    }
+                },
+                onSwipeLeft = {
+                    onRateCard(currentCard, 1)
+                    studiedCount++
+                    goToNextCard(studyList.size, currentIndex) { next ->
+                        currentIndex = next
+                        isFlipped = false
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Bottom Controls: When Not Flipped vs When Flipped
         if (!isFlipped) {

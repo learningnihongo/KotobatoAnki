@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FileDownload
@@ -274,7 +275,32 @@ fun AnkiSyncDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Action 3: Copy TSV for Anki Quick Import
+                // Action 3: Export CSV file
+                AnkiOptionCard(
+                    title = "CSV (.csv) ဖိုင် ထုတ်ယူ / မျှဝေရန်",
+                    subtitle = "Excel, Google Sheets သို့မဟုတ် အခြား App များတွင် အလွယ်တကူ ဖွင့်နိုင်သည်",
+                    icon = Icons.Default.Share,
+                    tag = "export_csv_button",
+                    onClick = {
+                        isLoading = true
+                        scope.launch {
+                            try {
+                                val csvFile = withContext(Dispatchers.IO) {
+                                    repository.exportToCsvFile(context, cards, deck.name)
+                                }
+                                isLoading = false
+                                shareCsvFile(context, csvFile, deck.name)
+                            } catch (e: Exception) {
+                                isLoading = false
+                                statusMessage = "CSV Export မအောင်မြင်ပါ: ${e.localizedMessage}"
+                            }
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Action 4: Copy TSV for Anki Quick Import
                 AnkiOptionCard(
                     title = "Anki Text (TSV) ကူးယူရန်",
                     subtitle = "Clipboard သို့ ကူးယူပြီး Anki ထဲတွင် ချက်ချင်း Paste လုပ်နိုင်သည်",
@@ -292,21 +318,44 @@ fun AnkiSyncDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Import (Anki ဖိုင်ထည့်သွင်းရန်)",
+                    text = "Import (ဖိုင်ထည့်သွင်းခြင်းနှင့် လမ်းညွှန်)",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Action 3: Import from Anki .apkg or .tsv
+                // Action 5: Import from Anki .apkg, .csv, or .txt
                 AnkiOptionCard(
-                    title = "Anki .apkg / TSV ဖိုင် ထည့်သွင်းရန်",
-                    subtitle = "ဖုန်းထဲရှိ Anki .apkg သို့မဟုတ် .txt/.tsv ဖိုင်ကို ရွေးချယ်ပါ",
+                    title = "TXT / CSV / Anki (.apkg) ဖိုင် သွင်းရန်",
+                    subtitle = "ဖုန်းထဲရှိ Text (.txt), CSV (.csv) သို့မဟုတ် Anki (.apkg) ဖိုင်ကို ရွေးချယ်ပါ",
                     icon = Icons.Default.FileUpload,
                     tag = "import_apkg_button",
                     onClick = {
-                        // Open file picker for apkg, zip, txt, tsv
                         importLauncher.launch(arrayOf("*/*"))
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Action 6: Format Guide Dialog
+                var showFormatGuide by remember { mutableStateOf(false) }
+                if (showFormatGuide) {
+                    FormatGuideDialog(
+                        onDismiss = { showFormatGuide = false },
+                        onImportClick = {
+                            showFormatGuide = false
+                            importLauncher.launch(arrayOf("*/*"))
+                        }
+                    )
+                }
+
+                AnkiOptionCard(
+                    title = "TXT & CSV ရေးသားနည်း လမ်းညွှန် (Format Guide)",
+                    subtitle = "Excel သို့မဟုတ် Notepad တွင် ဖိုင်ရေးသားနည်းနှင့် နမူနာများ ကြည့်ရန်",
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    tag = "show_format_guide_button",
+                    onClick = {
+                        showFormatGuide = true
                     }
                 )
 
@@ -331,8 +380,8 @@ fun AnkiSyncDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "လမ်းညွှန်: Anki .apkg ဖိုင်ကို Export ပြီးနောက် AnkiDroid App ဖြင့် တိုက်ရိုက်ဖွင့်လိုက်ပါက Deck အလိုအလျောက် သွင်းသွားပါမည်။",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            text = "လမ်းညွှန်: Anki .apkg ဖိုင်ကို Export ပြီးပါက AnkiDroid App ဖြင့် တိုက်ရိုက်ဖွင့်နိုင်ပါသည်။ Flashcard ၏ Back View တွင် Hiragana အသံထွက်နှင့် မြန်မာအဓိပ္ပာယ်ကို ရှင်းလင်းစွာ တွဲလျက် ပြသပေးမည် ဖြစ်ပါသည်။",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 18.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -443,5 +492,29 @@ private fun shareTextFile(context: Context, file: File, deckName: String) {
         context.startActivity(chooser)
     } catch (e: Exception) {
         Toast.makeText(context, "Error sharing .txt: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun shareCsvFile(context: Context, file: File, deckName: String) {
+    try {
+        val uri: Uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/comma-separated-values"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "$deckName (CSV Cards)")
+            putExtra(Intent.EXTRA_TEXT, file.readText())
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val chooser = Intent.createChooser(intent, "CSV (.csv) ဖိုင် မျှဝေရန်")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Error sharing .csv: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }

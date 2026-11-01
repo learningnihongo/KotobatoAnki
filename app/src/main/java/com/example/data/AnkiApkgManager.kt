@@ -109,16 +109,30 @@ object AnkiApkgManager {
                     val noteId = baseId + (index * 2)
                     val cardId = noteId + 1
 
-                    // Generate Front and Back HTML
+                    // Generate Front and Back HTML:
+                    // Front: Japanese Word (Kanji prompt, or Kana if no Kanji)
                     val frontHtml = buildString {
-                        if (card.kanji.isNotBlank() && card.kanji != card.kana) {
-                            append("<div style='font-size:32px; font-weight:bold; color:#1E1B4B;'>${escapeHtml(card.kanji)}</div>")
-                            append("<div style='font-size:18px; color:#475569; margin-top:4px;'>${escapeHtml(card.kana)}</div>")
+                        if (card.kanji.isNotBlank()) {
+                            append("<div style='font-size:38px; font-weight:bold; color:#1E1B4B; text-align:center; padding:12px 0;'>${escapeHtml(card.kanji)}</div>")
                         } else {
-                            append("<div style='font-size:30px; font-weight:bold; color:#1E1B4B;'>${escapeHtml(card.kana)}</div>")
+                            append("<div style='font-size:34px; font-weight:bold; color:#1E1B4B; text-align:center; padding:12px 0;'>${escapeHtml(card.kana)}</div>")
                         }
                     }
-                    val backHtml = "<div style='font-size:22px; color:#0F172A; line-height:1.4;'>${escapeHtml(card.burmeseMeaning)}</div>"
+
+                    // Back: Hiragana reading (Kana) AND Myanmar meaning clearly and prominently displayed together
+                    val backHtml = buildString {
+                        append("<div style='text-align:center;'>")
+                        if (card.kana.isNotBlank()) {
+                            append("<div style='font-size:13px; font-weight:bold; color:#6366F1; letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;'>[ အသံထွက် / READING ]</div>")
+                            append("<div style='font-size:26px; font-weight:bold; color:#4338CA; margin-bottom:14px;'>${escapeHtml(card.kana)}</div>")
+                        }
+                        append("<div style='font-size:13px; font-weight:bold; color:#059669; letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;'>[ မြန်မာအဓိပ္ပာယ် / MEANING ]</div>")
+                        append("<div style='font-size:23px; color:#0F172A; line-height:1.6; font-weight:600;'>${escapeHtml(card.burmeseMeaning)}</div>")
+                        if (card.notes.isNotBlank()) {
+                            append("<div style='font-size:14px; color:#475569; margin-top:14px; background:#F1F5F9; padding:8px 14px; border-radius:8px; display:inline-block;'>${escapeHtml(card.notes)}</div>")
+                        }
+                        append("</div>")
+                    }
 
                     val flds = "$frontHtml\u001f$backHtml"
                     val sfld = if (card.kanji.isNotBlank()) card.kanji else card.kana
@@ -310,38 +324,71 @@ object AnkiApkgManager {
 
     private fun importFromTextFile(file: File, rawFileName: String): ImportResult {
         val cards = mutableListOf<CardEntity>()
-        val lines = file.readLines()
+        val lines = file.readLines(Charsets.UTF_8)
         var order = 1
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.isBlank() || trimmed.startsWith("#")) continue
+        var isFirstLine = true
 
-            // Split by tab or pipe or comma
-            val tokens = when {
-                trimmed.contains('\t') -> trimmed.split('\t')
-                trimmed.contains('|') -> trimmed.split('|')
-                trimmed.contains(',') -> trimmed.split(',')
-                else -> listOf(trimmed)
+        for (rawLine in lines) {
+            val line = rawLine.trim().removePrefix("\uFEFF") // Strip UTF-8 BOM if present
+            if (line.isBlank() || line.startsWith("#")) continue
+
+            val tokens = parseDelimitedLine(line)
+            if (tokens.isEmpty()) continue
+
+            // Check if first line is a header row (e.g. "kanji,kana,meaning" or "front,back")
+            if (isFirstLine && isHeaderRow(tokens)) {
+                isFirstLine = false
+                continue
+            }
+            isFirstLine = false
+
+            var kanji = ""
+            var kana = ""
+            var meaning = ""
+            var notes = ""
+
+            when {
+                tokens.size >= 4 -> {
+                    // 4 columns: Kanji, Kana, Burmese Meaning, Notes
+                    kanji = cleanHtml(tokens[0])
+                    kana = cleanHtml(tokens[1])
+                    meaning = cleanHtml(tokens[2])
+                    notes = cleanHtml(tokens[3])
+                }
+                tokens.size == 3 -> {
+                    // 3 columns: Kanji, Kana, Burmese Meaning
+                    kanji = cleanHtml(tokens[0])
+                    kana = cleanHtml(tokens[1])
+                    meaning = cleanHtml(tokens[2])
+                }
+                tokens.size == 2 -> {
+                    // 2 columns: Front, Burmese Meaning
+                    val front = cleanHtml(tokens[0])
+                    meaning = cleanHtml(tokens[1])
+                    val parsed = parseFrontField(front)
+                    kanji = parsed.first
+                    kana = parsed.second
+                }
+                tokens.size == 1 -> {
+                    val front = cleanHtml(tokens[0])
+                    val parsed = parseFrontField(front)
+                    kanji = parsed.first
+                    kana = parsed.second
+                }
             }
 
-            if (tokens.isNotEmpty()) {
-                val front = cleanHtml(tokens[0].trim())
-                val back = if (tokens.size > 1) cleanHtml(tokens[1].trim()) else ""
-                val third = if (tokens.size > 2) cleanHtml(tokens[2].trim()) else ""
+            if (kana.isBlank() && kanji.isNotBlank()) {
+                kana = kanji
+            }
 
-                val (kanji, kana) = if (third.isNotBlank()) {
-                    Pair(front, back)
-                } else {
-                    parseFrontField(front)
-                }
-                val meaning = if (third.isNotBlank()) third else back
-
+            if (kana.isNotBlank() || kanji.isNotBlank() || meaning.isNotBlank()) {
                 cards.add(
                     CardEntity(
                         deckId = 0,
                         kanji = kanji,
                         kana = if (kana.isBlank()) kanji else kana,
                         burmeseMeaning = meaning,
+                        notes = notes,
                         orderIndex = order++
                     )
                 )
@@ -353,8 +400,91 @@ object AnkiApkgManager {
             .removeSuffix(".tsv")
             .removeSuffix(".csv")
             .replace('_', ' ')
+            .ifBlank { "Imported Flashcards" }
 
         return ImportResult(deckName = deckName, cards = cards)
+    }
+
+    /**
+     * Intelligently parses a line formatted as CSV (comma), TSV (tab), or Pipe (|),
+     * with full support for quotation marks and escaped commas.
+     */
+    private fun parseDelimitedLine(line: String): List<String> {
+        val delimiter = when {
+            line.contains('\t') -> '\t'
+            line.contains('|') -> '|'
+            line.contains(';') -> ';'
+            else -> ','
+        }
+
+        val tokens = mutableListOf<String>()
+        val current = java.lang.StringBuilder()
+        var inQuotes = false
+        var i = 0
+
+        while (i < line.length) {
+            val c = line[i]
+            when {
+                c == '"' -> {
+                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                        current.append('"')
+                        i++ // Skip escaped quote
+                    } else {
+                        inQuotes = !inQuotes
+                    }
+                }
+                c == delimiter && !inQuotes -> {
+                    tokens.add(current.toString().trim())
+                    current.setLength(0)
+                }
+                else -> {
+                    current.append(c)
+                }
+            }
+            i++
+        }
+        tokens.add(current.toString().trim())
+        return tokens
+    }
+
+    private fun isHeaderRow(tokens: List<String>): Boolean {
+        if (tokens.isEmpty()) return false
+        val firstCol = tokens[0].lowercase()
+        val secondCol = tokens.getOrNull(1)?.lowercase() ?: ""
+        return firstCol in listOf("kanji", "front", "word", "japanese", "စာလုံး", "expression") ||
+               secondCol in listOf("kana", "hiragana", "reading", "back", "meaning", "အသံထွက်", "အဓိပ္ပာယ်")
+    }
+
+    /**
+     * Generates a CSV formatted string with UTF-8 encoding.
+     */
+    fun exportToCsvText(cards: List<CardEntity>): String {
+        val sb = java.lang.StringBuilder()
+        sb.append("Kanji,Kana,BurmeseMeaning,Notes\n")
+        cards.forEach { card ->
+            val kanji = escapeCsvField(card.kanji)
+            val kana = escapeCsvField(card.kana)
+            val meaning = escapeCsvField(card.burmeseMeaning)
+            val notes = escapeCsvField(card.notes)
+            sb.append("$kanji,$kana,$meaning,$notes\n")
+        }
+        return sb.toString()
+    }
+
+    private fun escapeCsvField(value: String): String {
+        val cleaned = value.replace("\r", "")
+        return if (cleaned.contains(',') || cleaned.contains('"') || cleaned.contains('\n')) {
+            "\"" + cleaned.replace("\"", "\"\"") + "\""
+        } else {
+            cleaned
+        }
+    }
+
+    fun exportToCsvFile(context: Context, cards: List<CardEntity>, deckName: String): File {
+        val cleanName = deckName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val csvFile = File(context.cacheDir, "${cleanName}_flashcards.csv")
+        csvFile.writeText(exportToCsvText(cards), Charsets.UTF_8)
+        return csvFile
     }
 
     /**

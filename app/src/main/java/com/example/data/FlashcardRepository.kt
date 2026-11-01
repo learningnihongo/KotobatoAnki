@@ -163,4 +163,12 @@ class FlashcardRepository(
     fun exportToTsv(cards: List<CardEntity>): String {
         return AnkiApkgManager.exportToTsvText(cards)
     }
+
+    fun exportToCsvFile(context: Context, cards: List<CardEntity>, deckName: String): File {
+        return AnkiApkgManager.exportToCsvFile(context, cards, deckName)
+    }
+
+    fun exportToCsvText(cards: List<CardEntity>): String {
+        return AnkiApkgManager.exportToCsvText(cards)
+    }
 }
