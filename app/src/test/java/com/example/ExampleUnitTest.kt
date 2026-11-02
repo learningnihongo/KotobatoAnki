@@ -300,5 +300,39 @@ class ExampleUnitTest {
         assertTrue(updatedStarred.none { it.kanji == "血液型" })
         assertTrue(updatedStarred.any { it.kanji == "湖" })
     }
+
+    @Test
+    fun `verify ShuffleHelper true random, smart priority, and remaining cards shuffle`() {
+        val cards = listOf(
+            CardEntity(id = 1, deckId = 1, kanji = "A", kana = "a", burmeseMeaning = "a", isStarred = false, srsLevel = 3),
+            CardEntity(id = 2, deckId = 1, kanji = "B", kana = "b", burmeseMeaning = "b", isStarred = true, srsLevel = 0),
+            CardEntity(id = 3, deckId = 1, kanji = "C", kana = "c", burmeseMeaning = "c", isStarred = false, srsLevel = 1),
+            CardEntity(id = 4, deckId = 1, kanji = "D", kana = "d", burmeseMeaning = "d", isStarred = false, srsLevel = 2)
+        )
+
+        // 1. True Random Shuffle ensures first card differs from currentCard
+        val shuffledRandom = com.example.util.ShuffleHelper.shuffleCards(
+            cards = cards,
+            currentCard = cards[0],
+            type = com.example.util.ShuffleType.TRUE_RANDOM
+        )
+        assertEquals(4, shuffledRandom.size)
+        assertTrue(shuffledRandom.first().id != cards[0].id)
+
+        // 2. Smart Priority Shuffle places Starred card (B) first
+        val shuffledPriority = com.example.util.ShuffleHelper.shuffleCards(
+            cards = cards,
+            currentCard = null,
+            type = com.example.util.ShuffleType.SMART_PRIORITY
+        )
+        assertEquals(4, shuffledPriority.size)
+        assertEquals(2L, shuffledPriority.first().id)
+
+        // 3. Shuffle Remaining Cards keeps index 0 and 1 intact
+        val remaining = com.example.util.ShuffleHelper.shuffleRemainingCards(cards, fromIndex = 1)
+        assertEquals(4, remaining.size)
+        assertEquals(1L, remaining[0].id)
+        assertEquals(2L, remaining[1].id)
+    }
 }
 

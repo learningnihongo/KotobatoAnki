@@ -744,7 +744,13 @@ private fun generateIntelligentTiles(
     pairCount: Int,
     targetType: MatchTargetType
 ): List<MatchTile> {
-    val selectedCards = cards.shuffled().take(pairCount)
+    // Intelligent Prioritized Shuffle: prioritize Starred and Low SRS cards first
+    val prioritized = cards.sortedWith(
+        compareByDescending<CardEntity> { it.isStarred }
+            .thenBy { it.srsLevel }
+    )
+    val pool = prioritized.take(minOf(cards.size, pairCount * 3))
+    val selectedCards = pool.shuffled().take(pairCount)
     val tileList = mutableListOf<MatchTile>()
 
     selectedCards.forEach { card ->

@@ -147,11 +147,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = Screen.DASHBOARD
     }
 
-    fun startShuffledStudy(deck: DeckEntity) {
+    fun startShuffledStudy(
+        deck: DeckEntity,
+        shuffleType: com.example.util.ShuffleType = com.example.util.ShuffleType.TRUE_RANDOM,
+        customCards: List<CardEntity>? = null
+    ) {
+        val baseCards = when {
+            customCards != null -> customCards
+            deck.id == -998L -> _cardsByDeck.value.values.flatten().distinctBy { it.id }
+            deck.id == -999L -> allStarredCards.value
+            deck.id == -997L -> allMasteredCards.value
+            else -> _cardsByDeck.value[deck.id] ?: emptyList()
+        }
+        val shuffledCards = com.example.util.ShuffleHelper.shuffleCards(
+            cards = baseCards,
+            currentCard = null,
+            type = shuffleType
+        )
         _selectedDeck.value = deck
-        val cards = (_cardsByDeck.value[deck.id] ?: emptyList()).shuffled()
-        _currentDeckCards.value = cards
+        _currentDeckCards.value = shuffledCards
         _currentScreen.value = Screen.STUDY_FLIP
+    }
+
+    fun startAllCardsShuffledStudy(
+        shuffleType: com.example.util.ShuffleType = com.example.util.ShuffleType.TRUE_RANDOM
+    ) {
+        val allCards = _cardsByDeck.value.values.flatten().distinctBy { it.id }
+        val virtualDeck = DeckEntity(
+            id = -998L,
+            name = "🔀 ဝေါဟာရအားလုံး (${allCards.size} လုံး)",
+            description = "ဝေါဟာရအားလုံး ကျပန်းမွှေလေ့ကျင့်ခြင်း"
+        )
+        startShuffledStudy(
+            deck = virtualDeck,
+            shuffleType = shuffleType,
+            customCards = allCards
+        )
     }
 
     fun studyStarredCards(customCards: List<CardEntity>? = null) {

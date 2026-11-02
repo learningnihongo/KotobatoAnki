@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
+import com.example.util.ShuffleHelper
+import com.example.util.ShuffleType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -122,6 +126,8 @@ fun StudyFlipScreen(
     var isAutoAudioEnabled by remember { mutableStateOf(false) }
     var isShuffled by remember { mutableStateOf(false) }
     var showShuffleToast by remember { mutableStateOf(false) }
+    var shuffleToastMessage by remember { mutableStateOf("") }
+    var showShuffleOptionsDialog by remember { mutableStateOf(false) }
     var shuffleRotationAngle by remember { mutableFloatStateOf(0f) }
 
     val animatedShuffleAngle by animateFloatAsState(
@@ -130,18 +136,58 @@ fun StudyFlipScreen(
         label = "shuffle_angle"
     )
 
-    val doShuffle = {
-        studyList = studyList.shuffled()
-        currentIndex = 0
-        isFlipped = false
-        isShuffled = true
-        shuffleRotationAngle += 360f
-        showShuffleToast = true
+    val applyShuffle: (ShuffleType) -> Unit = { type ->
+        val currentCard = studyList.getOrNull(currentIndex)
+        when (type) {
+            ShuffleType.REMAINING_ONLY -> {
+                if (currentIndex < studyList.size - 1) {
+                    val remainingCount = studyList.size - currentIndex - 1
+                    studyList = ShuffleHelper.shuffleRemainingCards(studyList, currentIndex)
+                    isShuffled = true
+                    shuffleRotationAngle += 360f
+                    shuffleToastMessage = "လက်ရှိနေရာမှ ရှေ့ဆက်ကျန်ရှိသော ကတ် $remainingCount ခုကို မွှေလိုက်ပါပြီ ⏩"
+                    showShuffleToast = true
+                } else {
+                    shuffleToastMessage = "နောက်ဆုံးကတ်သို့ ရောက်ရှိနေပါပြီ 🏁"
+                    showShuffleToast = true
+                }
+            }
+            ShuffleType.RESET_ORIGINAL -> {
+                studyList = activeList.sortedWith(
+                    compareBy<CardEntity> { it.orderIndex }.thenBy { it.id }
+                )
+                currentIndex = 0
+                isFlipped = false
+                isShuffled = false
+                shuffleRotationAngle = 0f
+                shuffleToastMessage = "မူလအစီအစဉ်အတိုင်း ပြန်လည်ထားရှိလိုက်ပါပြီ ↩️"
+                showShuffleToast = true
+            }
+            else -> {
+                val shuffled = ShuffleHelper.shuffleCards(activeList, currentCard, type)
+                studyList = shuffled
+                currentIndex = 0
+                isFlipped = false
+                isShuffled = true
+                shuffleRotationAngle += 360f
+                shuffleToastMessage = when (type) {
+                    ShuffleType.SMART_PRIORITY -> "ခက်ခဲသောကတ်များကို ရှေ့ဆုံးထား၍ ဦးစားပေးမွှေလိုက်ပါပြီ ⭐"
+                    ShuffleType.UNMASTERED_ONLY -> "မကျက်ရသေးသောကတ် ${studyList.size} ခုကို သီးသန့်မွှေလိုက်ပါပြီ 🎯"
+                    else -> "ကတ် ${studyList.size} ခုကို ကျပန်း အသစ်မွှေလိုက်ပါပြီ 🔀"
+                }
+                showShuffleToast = true
+            }
+        }
+        showShuffleOptionsDialog = false
+    }
+
+    val doQuickShuffle = {
+        applyShuffle(ShuffleType.TRUE_RANDOM)
     }
 
     LaunchedEffect(showShuffleToast) {
         if (showShuffleToast) {
-            kotlinx.coroutines.delay(2200)
+            kotlinx.coroutines.delay(2600)
             showShuffleToast = false
         }
     }
@@ -301,7 +347,7 @@ fun StudyFlipScreen(
                 }
 
                 IconButton(
-                    onClick = doShuffle,
+                    onClick = { showShuffleOptionsDialog = true },
                     modifier = Modifier.testTag("study_shuffle_button")
                 ) {
                     Icon(
@@ -397,7 +443,7 @@ fun StudyFlipScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "ကတ် ${studyList.size} ခုကို ကျပန်းမွှေပြီးပါပြီ 🔀",
+                        text = if (shuffleToastMessage.isNotBlank()) shuffleToastMessage else "ကတ် ${studyList.size} ခုကို ကျပန်းမွှေပြီးပါပြီ 🔀",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -573,7 +619,7 @@ fun StudyFlipScreen(
 
             // Dedicated Shuffle Action Button
             OutlinedButton(
-                onClick = doShuffle,
+                onClick = { showShuffleOptionsDialog = true },
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.testTag("shuffle_cards_bottom_button")
             ) {
@@ -587,7 +633,7 @@ fun StudyFlipScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isShuffled) "ပြန်မွှေမည် (Reshuffle)" else "ကျပန်းမွှေမည် (Shuffle)",
+                    text = if (isShuffled) "Shuffle ပုံစံပြောင်းမည်" else "ကျပန်းမွှေမည် (Shuffle)",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -605,6 +651,17 @@ fun StudyFlipScreen(
             ) {
                 Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next")
             }
+        }
+
+        if (showShuffleOptionsDialog) {
+            ShuffleOptionsDialog(
+                currentCount = studyList.size,
+                currentIndex = currentIndex,
+                onDismiss = { showShuffleOptionsDialog = false },
+                onSelectOption = { selectedType ->
+                    applyShuffle(selectedType)
+                }
+            )
         }
     }
 }
@@ -745,3 +802,117 @@ private fun SessionCompleteView(
         }
     }
 }
+
+@Composable
+fun ShuffleOptionsDialog(
+    currentCount: Int,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+    onSelectOption: (ShuffleType) -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = "🔀", fontSize = 20.sp)
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = "Shuffle ပုံစံ ရွေးချယ်ပါ",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "စုစုပေါင်း $currentCount ကတ် (လက်ရှိ ${currentIndex + 1} နေရာ)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                )
+
+                ShuffleType.values().forEach { type ->
+                    val isRemaining = type == ShuffleType.REMAINING_ONLY
+                    val canUseRemaining = currentIndex < currentCount - 1
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isRemaining || canUseRemaining) {
+                                onSelectOption(type)
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = type.iconEmoji,
+                                fontSize = 22.sp,
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = type.title,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isRemaining && !canUseRemaining) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isRemaining && !canUseRemaining) "လက်ရှိနောက်ဆုံးကတ်သို့ ရောက်ရှိနေပါပြီ" else type.subtitle,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                OutlinedButton(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("မလုပ်တော့ပါ (Cancel)")
+                }
+            }
+        }
+    }
+}
+

@@ -451,7 +451,14 @@ fun QuizGameScreen(
 }
 
 private fun generateQuizQuestions(allCards: List<CardEntity>, count: Int): List<QuizQuestion> {
-    val shuffled = allCards.shuffled().take(count)
+    if (allCards.isEmpty()) return emptyList()
+    // Prioritize Starred and lower SRS cards first before taking quiz questions
+    val prioritized = allCards.sortedWith(
+        compareByDescending<CardEntity> { it.isStarred }
+            .thenBy { it.srsLevel }
+    )
+    val pool = prioritized.take(minOf(allCards.size, count * 3))
+    val shuffled = pool.shuffled().take(count)
     return shuffled.map { card ->
         val otherMeanings = allCards
             .filter { it.id != card.id && it.burmeseMeaning != card.burmeseMeaning }

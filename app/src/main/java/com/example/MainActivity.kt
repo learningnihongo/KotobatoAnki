@@ -316,6 +316,9 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             onSelectDeckForShuffleStudy = { deck ->
                                 viewModel.startShuffledStudy(deck)
                             },
+                            onStartShuffledStudy = { deck, shuffleType ->
+                                viewModel.startShuffledStudy(deck, shuffleType)
+                            },
                             allStarredCards = allStarredCards,
                             allMasteredCards = allMasteredCards,
                             onOpenAllCardsList = {
