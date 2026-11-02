@@ -21,16 +21,20 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
@@ -42,6 +46,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -65,8 +70,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.CardEntity
 import com.example.data.DeckEntity
+import com.example.data.LocalCacheManager
 import com.example.ui.theme.EasyGreen
 import com.example.ui.theme.GoldStar
+import com.example.ui.theme.GoodBlue
 import com.example.ui.theme.HardOrange
 
 @Composable
@@ -82,7 +89,11 @@ fun DeckListScreen(
     onDeleteDeck: (DeckEntity) -> Unit,
     onNavigateToDeckManager: () -> Unit,
     onOpenStarredReview: () -> Unit = {},
-    onSelectDeckForShuffleStudy: (DeckEntity) -> Unit = {}
+    onSelectDeckForShuffleStudy: (DeckEntity) -> Unit = {},
+    reminderConfig: LocalCacheManager.StudyReminderConfig? = null,
+    onOpenStudyProgress: () -> Unit = {},
+    onOpenReminderSettings: () -> Unit = {},
+    onOpenBackupRestore: () -> Unit = {}
 ) {
     var showCreateDeckDialog by remember { mutableStateOf(false) }
 
@@ -220,6 +231,186 @@ fun DeckListScreen(
                                 count = "$starredCount",
                                 label = "★ မှတ်ထားသော",
                                 onClick = onOpenStarredReview
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Study Progress & Streak Interactive Banner Card
+        item {
+            val masteryPercent = if (totalCount > 0) (masteredCount.toFloat() / totalCount.toFloat()) else 0f
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenStudyProgress() }
+                    .testTag("study_progress_dashboard_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = HardOrange.copy(alpha = 0.2f),
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocalFireDepartment,
+                                        contentDescription = null,
+                                        tint = HardOrange,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "${reminderConfig?.currentStreakDays ?: 1} ရက် ဆက်တိုက်",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        color = HardOrange.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "🔥 Streak",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = HardOrange,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "ယနေ့ စာကျက်ပန်းတိုင်: ${reminderConfig?.todayStudiedCount ?: 0} / ${reminderConfig?.dailyGoalCards ?: 20} ကတ်",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "View Study Progress",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    LinearProgressIndicator(
+                        progress = { masteryPercent },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = EasyGreen,
+                        trackColor = MaterialTheme.colorScheme.surface
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "ဝေါဟာရ အလွတ်ရမှု (Mastery): ${(masteryPercent * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = EasyGreen
+                        )
+                        Text(
+                            text = "တိုးတက်မှု အသေးစိတ်ကြည့်မည် →",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+
+        // Quick Tools Row: Reminder Settings & Backup/Restore
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Reminder Settings Button
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onOpenReminderSettings() }
+                        .testTag("dashboard_reminder_button"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "သတိပေးချက်",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "${String.format("%02d:%02d", reminderConfig?.reminderHour ?: 20, reminderConfig?.reminderMinute ?: 0)} PM",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Backup & Restore Button
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onOpenBackupRestore() }
+                        .testTag("dashboard_backup_button"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Backup,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "ဒေတာ Backup",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "အရန်သိမ်း/ပြန်ယူ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

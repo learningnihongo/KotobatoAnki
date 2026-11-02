@@ -20,12 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -66,6 +68,7 @@ fun VocabListScreen(
     cards: List<CardEntity>,
     onSpeak: (String) -> Unit,
     onToggleStar: (CardEntity) -> Unit,
+    onToggleMastered: (CardEntity) -> Unit = {},
     onEditCard: (CardEntity) -> Unit,
     onDeleteCard: (CardEntity) -> Unit,
     onAddNewCard: () -> Unit,
@@ -254,6 +257,7 @@ fun VocabListScreen(
                                 onSpeak(if (card.kanji.isNotBlank()) card.kanji else card.kana)
                             },
                             onToggleStar = { onToggleStar(card) },
+                            onToggleMastered = { onToggleMastered(card) },
                             onEdit = { onEditCard(card) },
                             onDelete = { onDeleteCard(card) }
                         )
@@ -300,6 +304,7 @@ private fun VocabItemCard(
     card: CardEntity,
     onSpeak: () -> Unit,
     onToggleStar: () -> Unit,
+    onToggleMastered: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -356,6 +361,21 @@ private fun VocabItemCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+
+                    if (card.srsLevel == 3) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = EasyGreen.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "🏆 Mastered",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                color = EasyGreen,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -378,11 +398,22 @@ private fun VocabItemCard(
                     )
                 }
 
+                // Toggle Star
                 IconButton(onClick = onToggleStar, modifier = Modifier.size(36.dp)) {
                     Icon(
                         imageVector = if (card.isStarred) Icons.Default.Star else Icons.Outlined.StarBorder,
                         contentDescription = "Star",
                         tint = if (card.isStarred) GoldStar else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Toggle Mastered
+                IconButton(onClick = onToggleMastered, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        imageVector = if (card.srsLevel == 3) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircleOutline,
+                        contentDescription = "Toggle Mastered",
+                        tint = if (card.srsLevel == 3) EasyGreen else MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(20.dp)
                     )
                 }

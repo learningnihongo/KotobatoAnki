@@ -130,6 +130,7 @@ class ExampleUnitTest {
                 fakeDecks.add(deck.copy(id = newId))
                 return newId
             }
+            override suspend fun insertDecks(decks: List<DeckEntity>): List<Long> = decks.map { insertDeck(it) }
             override suspend fun updateDeck(deck: DeckEntity) {}
             override suspend fun deleteDeck(deck: DeckEntity) {}
             override suspend fun getDeckCount() = fakeDecks.size
@@ -144,6 +145,23 @@ class ExampleUnitTest {
             override fun getAllStarredCardsFlow() = kotlinx.coroutines.flow.flowOf(fakeCards.filter { it.isStarred })
             override suspend fun getAllStarredCards() = fakeCards.filter { it.isStarred }
             override suspend fun getTotalStarredCardCount() = fakeCards.count { it.isStarred }
+            override fun getAllMasteredCardsFlow() = kotlinx.coroutines.flow.flowOf(fakeCards.filter { it.srsLevel == 3 })
+            override suspend fun getAllMasteredCards() = fakeCards.filter { it.srsLevel == 3 }
+            override suspend fun getTotalMasteredCardCount() = fakeCards.count { it.srsLevel == 3 }
+            override suspend fun updateCardStarred(cardId: Long, isStarred: Boolean) {
+                val c = fakeCards.find { it.id == cardId }
+                if (c != null) {
+                    val idx = fakeCards.indexOf(c)
+                    fakeCards[idx] = c.copy(isStarred = isStarred)
+                }
+            }
+            override suspend fun updateCardSrsLevel(cardId: Long, srsLevel: Int) {
+                val c = fakeCards.find { it.id == cardId }
+                if (c != null) {
+                    val idx = fakeCards.indexOf(c)
+                    fakeCards[idx] = c.copy(srsLevel = srsLevel)
+                }
+            }
             override suspend fun getAllCards() = fakeCards
             override suspend fun insertCard(card: CardEntity): Long {
                 val newId = (fakeCards.size + 1).toLong()
@@ -236,6 +254,17 @@ class ExampleUnitTest {
             override fun getAllStarredCardsFlow() = kotlinx.coroutines.flow.flowOf(testCards.filter { it.isStarred })
             override suspend fun getAllStarredCards() = testCards.filter { it.isStarred }
             override suspend fun getTotalStarredCardCount() = testCards.count { it.isStarred }
+            override fun getAllMasteredCardsFlow() = kotlinx.coroutines.flow.flowOf(testCards.filter { it.srsLevel == 3 })
+            override suspend fun getAllMasteredCards() = testCards.filter { it.srsLevel == 3 }
+            override suspend fun getTotalMasteredCardCount() = testCards.count { it.srsLevel == 3 }
+            override suspend fun updateCardStarred(cardId: Long, isStarred: Boolean) {
+                val index = testCards.indexOfFirst { it.id == cardId }
+                if (index != -1) testCards[index] = testCards[index].copy(isStarred = isStarred)
+            }
+            override suspend fun updateCardSrsLevel(cardId: Long, srsLevel: Int) {
+                val index = testCards.indexOfFirst { it.id == cardId }
+                if (index != -1) testCards[index] = testCards[index].copy(srsLevel = srsLevel)
+            }
             override suspend fun getAllCards() = testCards
             override suspend fun insertCard(card: CardEntity): Long {
                 testCards.add(card)
@@ -257,6 +286,7 @@ class ExampleUnitTest {
             override suspend fun getAllDecks() = emptyList<DeckEntity>()
             override suspend fun getDeckById(deckId: Long): DeckEntity? = null
             override suspend fun insertDeck(deck: DeckEntity): Long = 1L
+            override suspend fun insertDecks(decks: List<DeckEntity>): List<Long> = emptyList()
             override suspend fun updateDeck(deck: DeckEntity) {}
             override suspend fun deleteDeck(deck: DeckEntity) {}
             override suspend fun getDeckCount(): Int = 0

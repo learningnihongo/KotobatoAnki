@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
@@ -74,6 +76,7 @@ fun StarredCardsScreen(
     decks: List<DeckEntity>,
     onSpeak: (String) -> Unit,
     onToggleStar: (CardEntity) -> Unit,
+    onToggleMastered: (CardEntity) -> Unit = {},
     onEditCard: (CardEntity) -> Unit,
     onDeleteCard: (CardEntity) -> Unit,
     onStudyStarred: (List<CardEntity>) -> Unit,
@@ -94,7 +97,8 @@ fun StarredCardsScreen(
                 val q = searchQuery.trim().lowercase()
                 card.kanji.lowercase().contains(q) ||
                         card.kana.lowercase().contains(q) ||
-                        card.burmeseMeaning.lowercase().contains(q)
+                        card.burmeseMeaning.lowercase().contains(q) ||
+                        card.notes.lowercase().contains(q)
             }
             matchesDeck && matchesSearch
         }
@@ -379,6 +383,7 @@ fun StarredCardsScreen(
                         deckName = deckNameMap[card.deckId] ?: "Deck",
                         onSpeak = onSpeak,
                         onToggleStar = { onToggleStar(card) },
+                        onToggleMastered = { onToggleMastered(card) },
                         onEdit = { onEditCard(card) },
                         onDelete = { onDeleteCard(card) }
                     )
@@ -394,6 +399,7 @@ private fun StarredCardItem(
     deckName: String,
     onSpeak: (String) -> Unit,
     onToggleStar: () -> Unit,
+    onToggleMastered: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -428,18 +434,32 @@ private fun StarredCardItem(
                     )
                 }
 
-                // Star Button (Clickable to remove from starred)
-                IconButton(
-                    onClick = onToggleStar,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .testTag("star_toggle_${card.id}")
-                ) {
-                    Icon(
-                        imageVector = if (card.isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                        contentDescription = "Toggle Star",
-                        tint = if (card.isStarred) GoldStar else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                // Action Buttons: Mastered & Star
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onToggleMastered,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (card.srsLevel == 3) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircleOutline,
+                            contentDescription = "Toggle Mastered",
+                            tint = if (card.srsLevel == 3) EasyGreen else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onToggleStar,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("star_toggle_${card.id}")
+                    ) {
+                        Icon(
+                            imageVector = if (card.isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                            contentDescription = "Toggle Star",
+                            tint = if (card.isStarred) GoldStar else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 

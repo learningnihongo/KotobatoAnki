@@ -139,6 +139,14 @@ class SoundHelper(context: Context) {
         }
     }
 
+    fun playVictoryCheer() {
+        try {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_ACK, 350)
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
     fun shutdown() {
         try {
             tts?.stop()

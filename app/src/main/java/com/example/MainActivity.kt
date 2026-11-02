@@ -53,10 +53,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExtendedFloatingActionButton
 import com.example.data.CardEntity
 import com.example.data.DeckEntity
+import com.example.data.LocalCacheManager
 import com.example.ui.MainViewModel
 import com.example.ui.Screen
 import com.example.ui.components.AddCardModernFab
 import com.example.ui.components.AddCardOptionsBottomSheet
+import com.example.ui.components.BackupRestoreDialog
+import com.example.ui.components.StudyReminderDialog
+import com.example.ui.components.shareBackupFile
 import com.example.ui.screens.AddEditCardDialog
 import com.example.ui.screens.AddFlashcardScreen
 import com.example.ui.screens.AnkiSyncDialog
@@ -68,6 +72,7 @@ import com.example.ui.screens.DeckManagementScreen
 import com.example.ui.screens.MatchGameScreen
 import com.example.ui.screens.QuizGameScreen
 import com.example.ui.screens.StudyFlipScreen
+import com.example.ui.screens.StudyProgressScreen
 import com.example.ui.screens.VocabListScreen
 import com.example.ui.theme.MyApplicationTheme
 
@@ -103,6 +108,10 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
     var showCreateDeckDialog by remember { mutableStateOf(false) }
     var showAddCardBottomSheet by remember { mutableStateOf(false) }
     var showFormatGuideDialog by remember { mutableStateOf(false) }
+    var showReminderDialog by remember { mutableStateOf(false) }
+    var showBackupDialog by remember { mutableStateOf(false) }
+
+    val reminderConfig by viewModel.reminderConfig.collectAsState()
 
     val fileImportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
@@ -119,6 +128,31 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                     android.widget.Toast.makeText(context, "သွင်းယူမှု မအောင်မြင်ပါ: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
                 }
             }
+        }
+    }
+
+    val backupRestoreLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            viewModel.restoreBackup(
+                context = context,
+                uri = uri,
+                onSuccess = { dCount, cCount ->
+                    android.widget.Toast.makeText(
+                        context,
+                        "Backup မှ Deck $dCount ခု၊ ကတ် $cCount ခု ပြန်လည်ရယူပြီးပါပြီ! 💾✨",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                },
+                onError = { err ->
+                    android.widget.Toast.makeText(
+                        context,
+                        "Restore မအောင်မြင်ပါ: $err",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
         }
     }
 
@@ -256,7 +290,7 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                                 viewModel.navigateTo(Screen.QUIZ_GAME, deck)
                             },
                             onSelectDeckForMatch = { deck ->
-                                viewModel.navigateTo(Screen.MATCH_GAME, deck)
+                                viewModel.startMatchGame(deck)
                             },
                             onSelectDeckForList = { deck ->
                                 viewModel.navigateTo(Screen.VOCAB_LIST, deck)
@@ -279,6 +313,16 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             },
                             onSelectDeckForShuffleStudy = { deck ->
                                 viewModel.startShuffledStudy(deck)
+                            },
+                            reminderConfig = reminderConfig,
+                            onOpenStudyProgress = {
+                                viewModel.navigateTo(Screen.STUDY_PROGRESS)
+                            },
+                            onOpenReminderSettings = {
+                                showReminderDialog = true
+                            },
+                            onOpenBackupRestore = {
+                                showBackupDialog = true
                             }
                         )
                     }
@@ -337,8 +381,11 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
 
                     Screen.MATCH_GAME -> {
                         MatchGameScreen(
-                            cards = currentDeckCards,
+                            decks = allDecks,
+                            cardsByDeck = cardsByDeck,
+                            initialDeck = selectedDeck,
                             soundHelper = viewModel.soundHelper,
+                            onToggleStar = { card -> viewModel.toggleStar(card) },
                             onBack = { viewModel.navigateBack() }
                         )
                     }
@@ -351,6 +398,7 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                                 cards = currentDeckCards,
                                 onSpeak = { text -> viewModel.soundHelper.speakJapanese(text) },
                                 onToggleStar = { card -> viewModel.toggleStar(card) },
+                                onToggleMastered = { card -> viewModel.toggleMastered(card) },
                                 onEditCard = { card -> cardToEdit = card },
                                 onDeleteCard = { card -> viewModel.deleteCard(card) },
                                 onAddNewCard = { viewModel.navigateTo(Screen.ADD_CARD) },
@@ -382,6 +430,7 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             decks = allDecks,
                             onSpeak = { text -> viewModel.soundHelper.speakJapanese(text) },
                             onToggleStar = { card -> viewModel.toggleStar(card) },
+                            onToggleMastered = { card -> viewModel.toggleMastered(card) },
                             onEditCard = { card -> cardToEdit = card },
                             onDeleteCard = { card -> viewModel.deleteCard(card) },
                             onStudyStarred = { cardsToStudy ->
@@ -390,6 +439,16 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             onQuizStarred = { cardsToQuiz ->
                                 viewModel.quizStarredCards(cardsToQuiz)
                             },
+                            onBack = { viewModel.navigateBack() }
+                        )
+                    }
+
+                    Screen.STUDY_PROGRESS -> {
+                        StudyProgressScreen(
+                            decks = allDecks,
+                            cardsByDeck = cardsByDeck,
+                            reminderConfig = reminderConfig,
+                            onOpenReminderSettings = { showReminderDialog = true },
                             onBack = { viewModel.navigateBack() }
                         )
                     }
@@ -470,6 +529,44 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                     onImportClick = {
                         showFormatGuideDialog = false
                         fileImportLauncher.launch(arrayOf("*/*"))
+                    }
+                )
+            }
+
+            // Study Reminder Settings Dialog
+            if (showReminderDialog) {
+                StudyReminderDialog(
+                    currentConfig = reminderConfig,
+                    onDismiss = { showReminderDialog = false },
+                    onSave = { updated ->
+                        viewModel.updateReminderConfig(updated)
+                        showReminderDialog = false
+                        android.widget.Toast.makeText(
+                            context,
+                            if (updated.isEnabled) "နေ့စဉ်လေ့လာမှု သတိပေးချက်ကို ${updated.reminderHour}:${if (updated.reminderMinute < 10) "0${updated.reminderMinute}" else "${updated.reminderMinute}"} တွင် သတ်မှတ်လိုက်ပါပြီ! ⏰"
+                            else "သတိပေးချက်ကို ပိတ်ထားပါသည်",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                )
+            }
+
+            // Backup & Restore Dialog
+            if (showBackupDialog) {
+                val allCardsCount = cardsByDeck.values.sumOf { list: List<CardEntity> -> list.size }
+                val stats = remember(allDecks.size, allCardsCount) {
+                    LocalCacheManager.getCacheStats(context, allDecks.size, allCardsCount)
+                }
+                BackupRestoreDialog(
+                    cacheStats = stats,
+                    onDismiss = { showBackupDialog = false },
+                    onExportBackup = {
+                        viewModel.exportBackup(context) { backupFile ->
+                            shareBackupFile(context, backupFile)
+                        }
+                    },
+                    onTriggerRestore = {
+                        backupRestoreLauncher.launch(arrayOf("*/*"))
                     }
                 )
             }

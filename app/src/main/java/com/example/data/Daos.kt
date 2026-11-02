@@ -22,6 +22,9 @@ interface DeckDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDeck(deck: DeckEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDecks(decks: List<DeckEntity>): List<Long>
+
     @Update
     suspend fun updateDeck(deck: DeckEntity)
 
@@ -43,17 +46,32 @@ interface CardDao {
     @Query("SELECT * FROM cards WHERE id = :cardId LIMIT 1")
     suspend fun getCardById(cardId: Long): CardEntity?
 
-    @Query("SELECT * FROM cards WHERE deckId = :deckId AND isStarred = 1")
+    @Query("SELECT * FROM cards WHERE deckId = :deckId AND isStarred != 0")
     fun getStarredCardsFlow(deckId: Long): Flow<List<CardEntity>>
 
-    @Query("SELECT * FROM cards WHERE isStarred = 1 ORDER BY id DESC")
+    @Query("SELECT * FROM cards WHERE isStarred != 0 ORDER BY id DESC")
     fun getAllStarredCardsFlow(): Flow<List<CardEntity>>
 
-    @Query("SELECT * FROM cards WHERE isStarred = 1 ORDER BY id DESC")
+    @Query("SELECT * FROM cards WHERE isStarred != 0 ORDER BY id DESC")
     suspend fun getAllStarredCards(): List<CardEntity>
 
-    @Query("SELECT COUNT(*) FROM cards WHERE isStarred = 1")
+    @Query("SELECT COUNT(*) FROM cards WHERE isStarred != 0")
     suspend fun getTotalStarredCardCount(): Int
+
+    @Query("SELECT * FROM cards WHERE srsLevel = 3 ORDER BY id DESC")
+    fun getAllMasteredCardsFlow(): Flow<List<CardEntity>>
+
+    @Query("SELECT * FROM cards WHERE srsLevel = 3 ORDER BY id DESC")
+    suspend fun getAllMasteredCards(): List<CardEntity>
+
+    @Query("SELECT COUNT(*) FROM cards WHERE srsLevel = 3")
+    suspend fun getTotalMasteredCardCount(): Int
+
+    @Query("UPDATE cards SET isStarred = :isStarred WHERE id = :cardId")
+    suspend fun updateCardStarred(cardId: Long, isStarred: Boolean)
+
+    @Query("UPDATE cards SET srsLevel = :srsLevel WHERE id = :cardId")
+    suspend fun updateCardSrsLevel(cardId: Long, srsLevel: Int)
 
     @Query("SELECT * FROM cards")
     suspend fun getAllCards(): List<CardEntity>

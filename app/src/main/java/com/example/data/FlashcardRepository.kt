@@ -135,7 +135,13 @@ class FlashcardRepository(
     }
 
     suspend fun toggleStar(card: CardEntity) {
-        cardDao.updateCard(card.copy(isStarred = !card.isStarred))
+        val newStarred = !card.isStarred
+        cardDao.updateCardStarred(card.id, newStarred)
+    }
+
+    suspend fun toggleMastered(card: CardEntity) {
+        val newLevel = if (card.srsLevel == 3) 0 else 3
+        cardDao.updateCardSrsLevel(card.id, newLevel)
     }
 
     fun getAllStarredCardsFlow(): Flow<List<CardEntity>> = cardDao.getAllStarredCardsFlow()
@@ -143,6 +149,30 @@ class FlashcardRepository(
     suspend fun getAllStarredCards(): List<CardEntity> = cardDao.getAllStarredCards()
 
     suspend fun getTotalStarredCardCount(): Int = cardDao.getTotalStarredCardCount()
+
+    fun getAllMasteredCardsFlow(): Flow<List<CardEntity>> = cardDao.getAllMasteredCardsFlow()
+
+    suspend fun getAllMasteredCards(): List<CardEntity> = cardDao.getAllMasteredCards()
+
+    suspend fun getTotalMasteredCardCount(): Int = cardDao.getTotalMasteredCardCount()
+
+    suspend fun exportFullBackup(context: Context): File {
+        val decks = deckDao.getAllDecks()
+        val cards = cardDao.getAllCards()
+        return LocalCacheManager.exportBackupFile(context, decks, cards)
+    }
+
+    suspend fun restoreFromBackupJson(context: Context, jsonString: String): Pair<Int, Int> {
+        val parsed = LocalCacheManager.parseBackupJson(jsonString)
+            ?: throw IllegalArgumentException("Invalid backup JSON file format.")
+        val (decks, cards) = parsed
+        for (deck in decks) {
+            deckDao.insertDeck(deck)
+        }
+        cardDao.insertCards(cards)
+        syncOfflineDiskBackup(context)
+        return Pair(decks.size, cards.size)
+    }
 
     fun exportToApkg(context: Context, deck: DeckEntity, cards: List<CardEntity>): File {
         return AnkiApkgManager.exportToApkg(context, deck, cards)
@@ -163,6 +193,7 @@ class FlashcardRepository(
         val cardsToInsert = importResult.cards.map { it.copy(deckId = newDeckId) }
         cardDao.insertCards(cardsToInsert)
         val deck = deckDao.getDeckById(newDeckId) ?: DeckEntity(id = newDeckId, name = importResult.deckName)
+        syncOfflineDiskBackup(context)
         return Pair(deck, cardsToInsert.size)
     }
 

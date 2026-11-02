@@ -418,7 +418,11 @@ fun StudyFlipScreen(
                 isFlipped = isFlipped,
                 onFlip = { isFlipped = !isFlipped },
                 onSpeak = onSpeak,
-                onToggleStar = { onToggleStar(currentCard) },
+                onToggleStar = {
+                    val updated = currentCard.copy(isStarred = !currentCard.isStarred)
+                    studyList = studyList.map { if (it.id == currentCard.id) updated else it }
+                    onToggleStar(currentCard)
+                },
                 onSwipeRight = {
                     onRateCard(currentCard, 3)
                     studiedCount++

@@ -26,7 +26,8 @@ enum class Screen {
     MATCH_GAME,
     VOCAB_LIST,
     ADD_CARD,
-    STARRED_LIST
+    STARRED_LIST,
+    STUDY_PROGRESS
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -58,6 +59,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.WhileSubscribed(5000),
         emptyList()
     )
+
+    // Reactive list of all mastered cards (SRS level = 3)
+    val allMasteredCards: StateFlow<List<CardEntity>> = repository.getAllMasteredCardsFlow().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    // Study Reminder and Streak settings
+    private val _reminderConfig = MutableStateFlow(LocalCacheManager.getReminderConfig(application))
+    val reminderConfig: StateFlow<LocalCacheManager.StudyReminderConfig> = _reminderConfig.asStateFlow()
 
     // Map of deckId to List<CardEntity>
     private val _cardsByDeck = MutableStateFlow<Map<Long, List<CardEntity>>>(emptyMap())
@@ -102,7 +114,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _cardsByDeck.value = map
 
         val curDeckId = _selectedDeck.value?.id
-        if (curDeckId != null) {
+        if (curDeckId == -999L) {
+            // Starred cards virtual deck
+            _currentDeckCards.value = repository.getAllStarredCards()
+        } else if (curDeckId == -998L) {
+            // All cards virtual deck
+            _currentDeckCards.value = map.values.flatten()
+        } else if (curDeckId != null) {
             _currentDeckCards.value = map[curDeckId] ?: emptyList()
         }
 
@@ -163,6 +181,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun rateCard(card: CardEntity, rating: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateCardSrs(card, rating)
+            recordStudyProgress(1)
             allDecks.value.let { refreshAllCards(it) }
         }
     }
@@ -171,6 +190,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.toggleStar(card)
             allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun toggleMastered(card: CardEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.toggleMastered(card)
+            allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun updateReminderConfig(config: LocalCacheManager.StudyReminderConfig) {
+        LocalCacheManager.saveReminderConfig(getApplication(), config)
+        _reminderConfig.value = config
+    }
+
+    fun recordStudyProgress(count: Int = 1) {
+        LocalCacheManager.recordStudyEvent(getApplication(), count)
+        _reminderConfig.value = LocalCacheManager.getReminderConfig(getApplication())
+    }
+
+    fun startMatchGame(deck: DeckEntity? = null) {
+        if (deck != null) {
+            _selectedDeck.value = deck
+            _currentDeckCards.value = _cardsByDeck.value[deck.id] ?: emptyList()
+        } else {
+            // Play with All Cards across all decks (including imported decks!)
+            val allCards = _cardsByDeck.value.values.flatten()
+            val virtualDeck = DeckEntity(id = -998L, name = "ဝေါဟာရအားလုံး (All Decks)")
+            _selectedDeck.value = virtualDeck
+            _currentDeckCards.value = allCards
+        }
+        _currentScreen.value = Screen.MATCH_GAME
+    }
+
+    fun exportBackup(context: android.content.Context, onReady: (java.io.File) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = repository.exportFullBackup(context)
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onReady(file)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Failed to export backup", e)
+            }
+        }
+    }
+
+    fun restoreBackup(
+        context: android.content.Context,
+        uri: android.net.Uri,
+        onSuccess: (Int, Int) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val jsonString = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader(Charsets.UTF_8).readText()
+                } ?: throw IllegalArgumentException("ဖိုင်ဖတ်မရပါ")
+                val (deckCount, cardCount) = repository.restoreFromBackupJson(context, jsonString)
+                allDecks.value.let { refreshAllCards(it) }
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onSuccess(deckCount, cardCount)
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onError(e.localizedMessage ?: "Restore failed")
+                }
+            }
         }
     }
 
