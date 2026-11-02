@@ -27,6 +27,7 @@ enum class Screen {
     VOCAB_LIST,
     ADD_CARD,
     STARRED_LIST,
+    MASTERED_LIST,
     STUDY_PROGRESS
 }
 
@@ -120,6 +121,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else if (curDeckId == -998L) {
             // All cards virtual deck
             _currentDeckCards.value = map.values.flatten()
+        } else if (curDeckId == -997L) {
+            // Mastered cards virtual deck
+            _currentDeckCards.value = repository.getAllMasteredCards()
         } else if (curDeckId != null) {
             _currentDeckCards.value = map[curDeckId] ?: emptyList()
         }
@@ -178,6 +182,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun updateInMemoryCard(updatedCard: CardEntity) {
+        val currentMap = _cardsByDeck.value.toMutableMap()
+        val deckCards = currentMap[updatedCard.deckId]
+        if (deckCards != null) {
+            currentMap[updatedCard.deckId] = deckCards.map {
+                if (it.id == updatedCard.id) updatedCard else it
+            }
+            _cardsByDeck.value = currentMap
+        }
+        _currentDeckCards.value = _currentDeckCards.value.map {
+            if (it.id == updatedCard.id) updatedCard else it
+        }
+    }
+
     fun rateCard(card: CardEntity, rating: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateCardSrs(card, rating)
@@ -187,16 +205,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleStar(card: CardEntity) {
+        val updatedCard = card.copy(isStarred = !card.isStarred)
+        updateInMemoryCard(updatedCard)
         viewModelScope.launch(Dispatchers.IO) {
-            repository.toggleStar(card)
+            repository.updateCard(updatedCard)
             allDecks.value.let { refreshAllCards(it) }
         }
     }
 
     fun toggleMastered(card: CardEntity) {
+        val newLevel = if (card.srsLevel == 3) 0 else 3
+        val updatedCard = card.copy(srsLevel = newLevel)
+        updateInMemoryCard(updatedCard)
         viewModelScope.launch(Dispatchers.IO) {
-            repository.toggleMastered(card)
+            repository.updateCard(updatedCard)
             allDecks.value.let { refreshAllCards(it) }
+        }
+    }
+
+    fun viewAllCardsList() {
+        val allCards = _cardsByDeck.value.values.flatten()
+        val virtualDeck = DeckEntity(
+            id = -998L,
+            name = "ဝေါဟာရအားလုံး (${allCards.size} လုံး)",
+            description = "Decks အားလုံးမှ ဝေါဟာရများ စုစည်းမှု"
+        )
+        _selectedDeck.value = virtualDeck
+        _currentDeckCards.value = allCards
+        _currentScreen.value = Screen.VOCAB_LIST
+    }
+
+    fun viewMasteredCardsList() {
+        _currentScreen.value = Screen.MASTERED_LIST
+    }
+
+    fun studyMasteredCards(customCards: List<CardEntity>? = null) {
+        val targetCards = customCards ?: allMasteredCards.value
+        if (targetCards.isNotEmpty()) {
+            val virtualDeck = DeckEntity(
+                id = -997L,
+                name = "🏆 Mastered Cards",
+                description = "Mastered vocabulary review"
+            )
+            _selectedDeck.value = virtualDeck
+            _currentDeckCards.value = targetCards
+            _currentScreen.value = Screen.STUDY_FLIP
+        }
+    }
+
+    fun quizMasteredCards(customCards: List<CardEntity>? = null) {
+        val targetCards = customCards ?: allMasteredCards.value
+        if (targetCards.isNotEmpty()) {
+            val virtualDeck = DeckEntity(
+                id = -997L,
+                name = "🏆 Mastered Cards",
+                description = "Mastered vocabulary review"
+            )
+            _selectedDeck.value = virtualDeck
+            _currentDeckCards.value = targetCards
+            _currentScreen.value = Screen.QUIZ_GAME
         }
     }
 

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.GridView
@@ -65,6 +66,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -89,7 +92,11 @@ fun DeckListScreen(
     onDeleteDeck: (DeckEntity) -> Unit,
     onNavigateToDeckManager: () -> Unit,
     onOpenStarredReview: () -> Unit = {},
+    onOpenMasteredReview: () -> Unit = {},
+    onOpenAllCardsList: () -> Unit = {},
     onSelectDeckForShuffleStudy: (DeckEntity) -> Unit = {},
+    allStarredCards: List<CardEntity> = emptyList(),
+    allMasteredCards: List<CardEntity> = emptyList(),
     reminderConfig: LocalCacheManager.StudyReminderConfig? = null,
     onOpenStudyProgress: () -> Unit = {},
     onOpenReminderSettings: () -> Unit = {},
@@ -99,8 +106,8 @@ fun DeckListScreen(
 
     val allCards = cardsByDeck.values.flatten()
     val totalCount = allCards.size
-    val starredCount = allCards.count { it.isStarred }
-    val masteredCount = allCards.count { it.srsLevel == 3 }
+    val starredCount = allStarredCards.size
+    val masteredCount = allMasteredCards.size
 
     LazyColumn(
         modifier = Modifier
@@ -220,16 +227,27 @@ fun DeckListScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Quick Stats Row
+                        // Quick Stats Row (Interactive 1-tap navigation)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            StatPill(count = "$totalCount", label = "ဝေါဟာရစုစုပေါင်း")
-                            StatPill(count = "$masteredCount", label = "ကျက်ပြီး (Mastered)")
+                            StatPill(
+                                count = "$totalCount",
+                                label = "ဝေါဟာရစုစုပေါင်း",
+                                modifier = Modifier.weight(1f),
+                                onClick = onOpenAllCardsList
+                            )
+                            StatPill(
+                                count = "$masteredCount",
+                                label = "ကျက်ပြီး (Mastered)",
+                                modifier = Modifier.weight(1f),
+                                onClick = onOpenMasteredReview
+                            )
                             StatPill(
                                 count = "$starredCount",
                                 label = "★ မှတ်ထားသော",
+                                modifier = Modifier.weight(1f),
                                 onClick = onOpenStarredReview
                             )
                         }
@@ -490,6 +508,152 @@ fun DeckListScreen(
             }
         }
 
+        // Mastered Cards Review Banner Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenMasteredReview() }
+                    .testTag("mastered_review_banner_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = EasyGreen.copy(alpha = 0.12f)
+                ),
+                border = BorderStroke(1.dp, EasyGreen.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = EasyGreen.copy(alpha = 0.25f),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.EmojiEvents,
+                                contentDescription = null,
+                                tint = EasyGreen,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ကျက်ပြီးသောကတ်များ (Mastered)",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = EasyGreen.copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = "$masteredCount ခု 🏆",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = EasyGreen,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "ကျွမ်းကျင်ပြီးသော ဝေါဟာရများကို သီးသန့်စစ်ဆေး/ပြန်လည်လေ့ကျင့်မည်",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open Mastered Cards",
+                        tint = EasyGreen
+                    )
+                }
+            }
+        }
+
+        // All Vocabulary Banner Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenAllCardsList() }
+                    .testTag("all_vocab_banner_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Style,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ဝေါဟာရအားလုံး စာရင်း (All Vocab)",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "$totalCount လုံး 📚",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Deck အားလုံးမှ ဝေါဟာရများအားလုံးကို တစ်နေရာတည်းတွင် ရှာဖွေ၊ Star နှင့် Mastered သတ်မှတ်မည်",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open All Vocab",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
         // Section: Game Modes
         item {
             Text(
@@ -697,27 +861,44 @@ fun DeckListScreen(
 private fun StatPill(
     count: String,
     label: String,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color.White.copy(alpha = 0.15f),
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White.copy(alpha = 0.18f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = count,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                 color = Color.White
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                color = Color.White.copy(alpha = 0.8f)
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                color = Color.White.copy(alpha = 0.95f),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+            if (onClick != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "နှိပ်၍ကြည့်ရန် 👆",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }

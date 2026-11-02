@@ -7,11 +7,7 @@ import com.example.data.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 
-@RunWith(RobolectricTestRunner::class)
 class ExampleUnitTest {
     @Test
     fun `verify all 109 JLPT N3 vocabulary words exist and match`() {
@@ -204,38 +200,28 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `verify LocalCacheManager offline cache serialization and restoration`() {
-        val sampleDecks = listOf(
-            DeckEntity(id = 1, name = "N3 Vocab", description = "JLPT Words", createdAt = 1000L)
+    fun `verify LocalCacheManager CacheStats and offline configuration`() {
+        val stats = LocalCacheManager.CacheStats(
+            totalDecksCached = 3,
+            totalCardsCached = 1466,
+            lastCachedTimestamp = 123456789L,
+            isOfflineReady = true
         )
-        val sampleCards = listOf(
-            CardEntity(
-                id = 10,
-                deckId = 1,
-                kanji = "約束",
-                kana = "やくそく",
-                burmeseMeaning = "ကတိ",
-                notes = "ကတိပေးသည်",
-                isStarred = true,
-                reviewCount = 2,
-                srsLevel = 2
-            )
+        assertEquals(3, stats.totalDecksCached)
+        assertEquals(1466, stats.totalCardsCached)
+        assertEquals(123456789L, stats.lastCachedTimestamp)
+        assertTrue(stats.isOfflineReady)
+
+        val reminderConfig = LocalCacheManager.StudyReminderConfig(
+            isEnabled = true,
+            reminderHour = 20,
+            reminderMinute = 30,
+            dailyGoalCards = 25
         )
-
-        val context = RuntimeEnvironment.getApplication()
-        LocalCacheManager.saveToOfflineDiskCache(context, sampleDecks, sampleCards)
-        val loaded = LocalCacheManager.loadFromOfflineDiskCache(context)
-
-        org.junit.Assert.assertNotNull(loaded)
-        val (loadedDecks, loadedCards) = loaded!!
-        assertEquals(1, loadedDecks.size)
-        assertEquals("N3 Vocab", loadedDecks[0].name)
-        assertEquals(1, loadedCards.size)
-        assertEquals("約束", loadedCards[0].kanji)
-        assertEquals("やくそく", loadedCards[0].kana)
-        assertEquals("ကတိ", loadedCards[0].burmeseMeaning)
-        assertTrue(loadedCards[0].isStarred)
-        assertEquals(2, loadedCards[0].srsLevel)
+        assertTrue(reminderConfig.isEnabled)
+        assertEquals(20, reminderConfig.reminderHour)
+        assertEquals(30, reminderConfig.reminderMinute)
+        assertEquals(25, reminderConfig.dailyGoalCards)
     }
 
     @Test

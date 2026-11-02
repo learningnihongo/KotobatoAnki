@@ -70,6 +70,7 @@ import com.example.ui.screens.DeckListScreen
 import com.example.ui.screens.StarredCardsScreen
 import com.example.ui.screens.DeckManagementScreen
 import com.example.ui.screens.MatchGameScreen
+import com.example.ui.screens.MasteredCardsScreen
 import com.example.ui.screens.QuizGameScreen
 import com.example.ui.screens.StudyFlipScreen
 import com.example.ui.screens.StudyProgressScreen
@@ -96,6 +97,7 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
     val cardsByDeck by viewModel.cardsByDeck.collectAsState()
     val currentDeckCards by viewModel.currentDeckCards.collectAsState()
     val allStarredCards by viewModel.allStarredCards.collectAsState()
+    val allMasteredCards by viewModel.allMasteredCards.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -314,6 +316,14 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             onSelectDeckForShuffleStudy = { deck ->
                                 viewModel.startShuffledStudy(deck)
                             },
+                            allStarredCards = allStarredCards,
+                            allMasteredCards = allMasteredCards,
+                            onOpenAllCardsList = {
+                                viewModel.viewAllCardsList()
+                            },
+                            onOpenMasteredReview = {
+                                viewModel.viewMasteredCardsList()
+                            },
                             reminderConfig = reminderConfig,
                             onOpenStudyProgress = {
                                 viewModel.navigateTo(Screen.STUDY_PROGRESS)
@@ -438,6 +448,28 @@ fun MainApp(viewModel: MainViewModel = viewModel()) {
                             },
                             onQuizStarred = { cardsToQuiz ->
                                 viewModel.quizStarredCards(cardsToQuiz)
+                            },
+                            onBack = { viewModel.navigateBack() }
+                        )
+                    }
+
+                    Screen.MASTERED_LIST -> {
+                        MasteredCardsScreen(
+                            masteredCards = allMasteredCards,
+                            decks = allDecks,
+                            onSpeak = { text -> viewModel.soundHelper.speakJapanese(text) },
+                            onToggleStar = { card -> viewModel.toggleStar(card) },
+                            onToggleMastered = { card -> viewModel.toggleMastered(card) },
+                            onEditCard = { card -> cardToEdit = card },
+                            onDeleteCard = { card -> viewModel.deleteCard(card) },
+                            onStudyMastered = { cardsToStudy ->
+                                viewModel.studyMasteredCards(cardsToStudy)
+                            },
+                            onQuizMastered = { cardsToQuiz ->
+                                viewModel.quizMasteredCards(cardsToQuiz)
+                            },
+                            onOpenAllVocab = {
+                                viewModel.viewAllCardsList()
                             },
                             onBack = { viewModel.navigateBack() }
                         )
